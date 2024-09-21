@@ -1,237 +1,145 @@
-use fs::File;
-use io::{BufRead, Read, Write};
-use path::{Path, PathBuf};
-use std::env::var_os;
-use std::{env, fmt, fs, io, path};
+use std::fs::File;
+use std::io::Read;
+use std::{
+    env::{self, var_os},
+    fs, io,
+    io::{BufRead, Write},
+    path::{Path, PathBuf},
+};
+use thiserror::Error;
 
-// 定义可能出现的错误类型
-enum Error {
-    GitDirNotFound,               // Git 目录未找到
-    Io(io::Error),                // IO 错误
-    OutDir(env::VarError),        // 环境变量错误
-    InvalidUserHooksDir(PathBuf), // 无效的用户钩子目录
-    EmptyUserHook(PathBuf),       // 空的用户钩子脚本
+// 定义错误类型
+#[derive(Error, Debug)]
+enum HuskyError {
+    #[error(".git directory was not found in '{0}' or its parent directories")]
+    GitDirNotFound(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Environment variable error: {0}")]
+    Env(#[from] env::VarError),
+
+    #[error("User hooks directory is invalid: '{0:?}'")]
+    InvalidUserHooksDir(PathBuf),
+
+    #[error("User hook script is empty: '{0:?}'")]
+    EmptyUserHook(PathBuf),
 }
 
-// 定义 Result 类型别名，用于错误处理
-type Result<T> = std::result::Result<T, Error>;
+// 定义 Result 类型别名
+type Result<T> = std::result::Result<T, HuskyError>;
 
-// 实现 From trait，用于将 io::Error 转换为自定义 Error
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Error {
-        Error::Io(error)
-    }
-}
-
-// 实现 From trait，用于将 env::VarError 转换为自定义 Error
-impl From<env::VarError> for Error {
-    fn from(error: env::VarError) -> Error {
-        Error::OutDir(error)
-    }
-}
-
-// 为 Error 实现 Debug trait，用于格式化错误信息
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let msg = match self {
-            Error::GitDirNotFound => format!(
-                ".git directory was not found in '{}' or its parent directories",
-                env::var("OUT_DIR").unwrap_or_else(|_| "".to_string()),
-            ),
-            Error::Io(inner) => format!("IO error: {}", inner),
-            Error::OutDir(env::VarError::NotPresent) => unreachable!(),
-            Error::OutDir(env::VarError::NotUnicode(msg)) => msg.to_string_lossy().to_string(),
-            Error::InvalidUserHooksDir(path) => {
-                format!("User hooks directory is not found or no executable file is found in '{:?}'. Did you forget to make a hook script executable?", path)
-            }
-            Error::EmptyUserHook(path) => format!("User hook script is empty: {:?}", path),
-        };
-        write!(f, "{}", msg)
-    }
-}
-
-// 查找 Git 目录的函数
-fn resolve_gitdir() -> Result<PathBuf> {
+// 查找 Git 目录
+fn resolve_git_dir() -> Result<PathBuf> {
     let dir = env::var("OUT_DIR")?;
     let mut dir = PathBuf::from(dir);
     if !dir.has_root() {
-        dir = fs::canonicalize(dir)?;
+        dir = fs::canonicalize(&dir)?;
     }
+
     loop {
-        let gitdir = dir.join(".git");
-        if gitdir.is_dir() {
-            return Ok(gitdir);
+        let git_dir = dir.join(".git");
+        if git_dir.is_dir() {
+            return Ok(git_dir);
+        } else if git_dir.is_file() {
+            return read_git_submodule(git_dir);
         }
-        if gitdir.is_file() {
-            // 处理 Git 子模块的情况
-            let mut buf = String::new();
-            File::open(gitdir)?.read_to_string(&mut buf)?;
-            let newlines: &[_] = &['\n', '\r'];
-            let gitdir = PathBuf::from(buf.trim_end_matches(newlines));
-            if !gitdir.is_dir() {
-                return Err(Error::GitDirNotFound);
-            }
-            return Ok(gitdir);
-        }
+
         if !dir.pop() {
-            return Err(Error::GitDirNotFound);
+            return Err(HuskyError::GitDirNotFound(
+                env::var("OUT_DIR").unwrap_or_default(),
+            ));
         }
     }
 }
 
-// 检查钩子是否已存在的函数
+// 处理 Git 子模块情况
+fn read_git_submodule(git_file: PathBuf) -> Result<PathBuf> {
+    let mut content = String::new();
+    File::open(git_file)?.read_to_string(&mut content)?;
+    let newlines = ['\n', '\r'];
+    let git_dir = PathBuf::from(content.trim_end_matches(&newlines));
+    if !git_dir.is_dir() {
+        return Err(HuskyError::GitDirNotFound(git_dir.display().to_string()));
+    }
+    Ok(git_dir)
+}
+
+// 检查钩子是否已存在
 fn hook_already_exists(hook: &Path) -> bool {
-    let f = match File::open(hook) {
-        Ok(f) => f,
-        Err(..) => return false,
-    };
-
-    let ver_line = match io::BufReader::new(f).lines().nth(2) {
-        None => return true,           // 少于2行，钩子脚本可能是由其他人生成的
-        Some(Err(..)) => return false, // 读取失败，重新生成
-        Some(Ok(line)) => line,
-    };
-
-    if !ver_line.contains("This hook was set by husky-rs") {
-        // 钩子脚本由其他人生成
-        true
-    } else {
-        let ver_comment = format!(
-            "This hook was set by husky-rs v{}",
-            env!("CARGO_PKG_VERSION")
-        );
-        ver_line.contains(&ver_comment)
+    if let Ok(f) = File::open(hook) {
+        let ver_line = io::BufReader::new(f)
+            .lines()
+            .nth(2)
+            .unwrap_or(Ok(String::new()))
+            .ok();
+        if let Some(ver_line) = ver_line {
+            return ver_line.contains("This hook was set by husky-rs");
+        }
     }
+    false
 }
 
-// 写入钩子脚本的函数
-fn write_script<W: io::Write>(w: &mut W) -> Result<()> {
-    // 定义原始命令宏
-    macro_rules! raw_cmd {
-        ($c:expr) => {
-            concat!("\necho '+", $c, "'\n", $c)
-        };
+// 安装用户钩子
+fn install_user_hooks() -> Result<()> {
+    let git_dir = resolve_git_dir()?; // 获取 .git 目录
+
+    // 获取项目根目录，并处理没有父目录的情况
+    let project_root = git_dir
+        .parent()
+        .ok_or_else(|| HuskyError::GitDirNotFound(git_dir.display().to_string()))?;
+
+    // 拼接 .husky-rs/hooks 路径
+    let user_hooks_dir = project_root.join(".husky-rs").join("hooks");
+
+    // 输出调试信息
+    println!("User hooks directory path: {:?}", user_hooks_dir);
+
+    // 检查用户钩子目录是否存在
+    if !user_hooks_dir.is_dir() {
+        return Err(HuskyError::InvalidUserHooksDir(user_hooks_dir));
     }
 
-    // 根据 "run-for-all" 特性定义命令宏
-    #[cfg(feature = "run-for-all")]
-    macro_rules! cmd {
-        ($c:expr) => {
-            raw_cmd!(concat!($c, " --all"))
-        };
-        ($c:expr, $subflags:expr) => {
-            raw_cmd!(concat!($c, " --all -- ", $subflags))
-        };
+    // 拼接 git hooks 目录
+    let hooks_dir = git_dir.join("hooks");
+
+    // 如果 git hooks 目录不存在，则创建
+    if !hooks_dir.exists() {
+        fs::create_dir(&hooks_dir)?;
     }
 
-    #[cfg(not(feature = "run-for-all"))]
-    macro_rules! cmd {
-        ($c:expr) => {
-            raw_cmd!($c)
-        };
-        ($c:expr, $subflags:expr) => {
-            raw_cmd!(concat!($c, " -- ", $subflags))
-        };
+    // 遍历用户定义的钩子文件并安装
+    for hook in fs::read_dir(&user_hooks_dir)?
+        .filter_map(|e| e.ok()) // 忽略无法读取的条目
+        .filter(is_executable_file) // 只处理可执行文件
+        .map(|e| e.path())
+    // 获取路径
+    {
+        install_user_hook(&hook, &hooks_dir)?; // 安装钩子
     }
 
-    // 根据不同的特性构建脚本内容
-    let script = {
-        let mut s = String::new();
-        if cfg!(feature = "run-cargo-test") {
-            s += cmd!("cargo test");
-        }
-        if cfg!(feature = "run-cargo-check") {
-            s += cmd!("cargo check");
-        }
-        if cfg!(feature = "run-cargo-clippy") {
-            s += cmd!("cargo clippy", "-D warnings");
-        }
-        if cfg!(feature = "run-cargo-fmt") {
-            s += cmd!("cargo fmt", "--check");
-        }
-        s
-    };
-
-    // 写入钩子脚本
-    writeln!(
-        w,
-        r#"#!/bin/sh
-#
-# This hook was set by husky-rs v{}: {}
-# Generated by script {}{}build.rs
-# Output at {}
-#
-
-set -e
-{}"#,
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_HOMEPAGE"),
-        env!("CARGO_MANIFEST_DIR"),
-        path::MAIN_SEPARATOR,
-        env::var("OUT_DIR").unwrap_or_else(|_| "".to_string()),
-        script
-    )?;
     Ok(())
 }
 
-// 根据操作系统创建可执行文件
-#[cfg(target_os = "windows")]
-fn create_executable_file(path: &Path) -> io::Result<File> {
-    File::create(path)
-}
+// 安装用户钩子文件
+fn install_user_hook(src: &Path, dst_dir: &Path) -> Result<()> {
+    let dst = dst_dir.join(src.file_name().unwrap());
 
-#[cfg(not(target_os = "windows"))]
-fn create_executable_file(path: &Path) -> io::Result<File> {
-    use std::os::unix::fs::OpenOptionsExt;
-
-    fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o755)
-        .open(path)
-}
-
-// 安装钩子的函数
-fn install_hook(hook: &str) -> Result<()> {
-    let hook_path = {
-        let mut p = resolve_gitdir()?;
-        p.push("hooks");
-
-        // 检查 .git/hooks 是否存在，如果不存在则创建
-        if !p.exists() {
-            fs::create_dir(p.as_path())?;
-        }
-
-        p.push(hook);
-        p
-    };
-    if !hook_already_exists(&hook_path) {
-        let mut f = create_executable_file(&hook_path)?;
-        write_script(&mut f)?;
-    }
-    Ok(())
-}
-
-// 安装用户自定义钩子的函数
-fn install_user_hook(src: &Path, dst: &Path) -> Result<()> {
-    if hook_already_exists(dst) {
+    if hook_already_exists(&dst) {
         return Ok(());
     }
 
-    let mut lines = {
-        let mut vec = vec![];
-        for line in io::BufReader::new(File::open(src)?).lines() {
-            vec.push(line?);
-        }
-        vec
-    };
+    let mut lines: Vec<String> = io::BufReader::new(File::open(src)?)
+        .lines()
+        .map(|line| line.map_err(HuskyError::from)) // 将 io::Error 转换为 HookError
+        .collect::<Result<_>>()?;
 
     if lines.is_empty() {
-        return Err(Error::EmptyUserHook(src.to_owned()));
+        return Err(HuskyError::EmptyUserHook(src.to_owned()));
     }
 
-    // 插入 husky-rs 包版本信息作为注释
+    // 添加 husky-rs 版本注释
     if !lines[0].starts_with("#!") {
         lines.insert(0, "#".to_string());
     }
@@ -245,9 +153,7 @@ fn install_user_hook(src: &Path, dst: &Path) -> Result<()> {
         ),
     );
 
-    let dst_file_path = dst.join(src.file_name().unwrap());
-
-    let mut f = io::BufWriter::new(create_executable_file(&dst_file_path)?);
+    let mut f = io::BufWriter::new(create_executable_file(&dst)?);
     for line in lines {
         writeln!(f, "{}", line)?;
     }
@@ -255,80 +161,34 @@ fn install_user_hook(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-// 根据操作系统判断文件是否可执行
-#[cfg(target_os = "windows")]
-fn is_executable_file(entry: &fs::DirEntry) -> bool {
-    match entry.file_type() {
-        Ok(ft) => ft.is_file(),
-        Err(..) => false,
-    }
+// 根据操作系统创建可执行文件
+#[cfg(not(target_os = "windows"))]
+fn create_executable_file(path: &Path) -> io::Result<File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o755)
+        .open(path)
 }
 
+#[cfg(target_os = "windows")]
+fn create_executable_file(path: &Path) -> io::Result<File> {
+    File::create(path)
+}
+
+// 判断文件是否可执行 (Unix 和 Windows 适配)
 #[cfg(not(target_os = "windows"))]
 fn is_executable_file(entry: &fs::DirEntry) -> bool {
     use std::os::unix::fs::PermissionsExt;
-
-    let ft = match entry.file_type() {
-        Ok(ft) => ft,
-        Err(..) => return false,
-    };
-    if !ft.is_file() {
-        return false;
-    }
-    let md = match entry.metadata() {
-        Ok(md) => md,
-        Err(..) => return false,
-    };
-    let mode = md.permissions().mode();
-    mode & 0o555 == 0o555 // 检查文件是否具有读取和执行权限
+    let metadata = entry.metadata().ok()?;
+    metadata.permissions().mode() & 0o111 != 0
 }
 
-// 安装用户自定义钩子的函数
-fn install_user_hooks() -> Result<()> {
-    let git_dir = resolve_gitdir()?;
-    let user_hooks_dir = {
-        let mut p = git_dir.clone();
-        p.pop();
-        p.push(".husky-rs");
-        p.push("hooks");
-        p
-    };
-
-    if !user_hooks_dir.is_dir() {
-        return Err(Error::InvalidUserHooksDir(user_hooks_dir));
-    }
-
-    let hook_paths = fs::read_dir(&user_hooks_dir)?
-        .filter_map(|e| e.ok().filter(is_executable_file).map(|e| e.path()))
-        .collect::<Vec<_>>();
-
-    if hook_paths.is_empty() {
-        return Err(Error::InvalidUserHooksDir(user_hooks_dir));
-    }
-
-    let hooks_dir = git_dir.join("hooks");
-    for path in hook_paths {
-        install_user_hook(&path, &hooks_dir)?;
-    }
-
-    Ok(())
-}
-
-// 安装钩子的主函数
-fn install() -> Result<()> {
-    if cfg!(feature = "user-hooks") {
-        return install_user_hooks();
-    }
-    if cfg!(feature = "prepush-hook") {
-        install_hook("pre-push")?;
-    }
-    if cfg!(feature = "precommit-hook") {
-        install_hook("pre-commit")?;
-    }
-    if cfg!(feature = "postmerge-hook") {
-        install_hook("post-merge")?;
-    }
-    Ok(())
+#[cfg(target_os = "windows")]
+fn is_executable_file(entry: &fs::DirEntry) -> bool {
+    entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
 }
 
 // 主函数
@@ -339,13 +199,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // 执行安装过程
-    match install() {
-        Err(e @ Error::GitDirNotFound) => {
+    // 执行用户钩子安装
+    match install_user_hooks() {
+        Err(e @ HuskyError::GitDirNotFound(_)) => {
             // 如果没有找到 Git 目录，输出警告但不中断程序
             eprintln!("Warning: {:?}", e);
             Ok(())
         }
-        otherwise => otherwise,
+        result => result,
     }
 }
