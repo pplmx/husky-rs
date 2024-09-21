@@ -1,0 +1,34 @@
+[package]
+name = "husky-rs"
+version = "1.5.0"
+edition = "2021"
+authors = ["Mystic"]
+description = "husky for cargo"
+repository = "https://github.com/pplmx/husky-rs"
+homepage = "https://github.com/pplmx/husky-rs#readme"
+readme = "README.md"
+keywords = ["git", "hook", "cargo"]
+categories = ["development-tools"]
+license = "MIT"
+build = "build.rs"
+include = ["build.rs", "LICENSE.txt", "Cargo.toml", "src/**/*.rs"]
+
+[package.metadata.release]
+no-dev-version = true
+
+[features]
+default = ["prepush-hook", "run-cargo-test", "run-for-all"]
+prepush-hook = []
+precommit-hook = []
+postmerge-hook = []
+run-cargo-test = []
+run-cargo-check = []
+run-cargo-clippy = []
+run-cargo-fmt = []
+run-for-all = []
+user-hooks = []
+
+[dev-dependencies]
+libc = "0.2"
+lazy_static = "1.4"
+semver = "1.0"
