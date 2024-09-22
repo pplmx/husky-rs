@@ -4,21 +4,9 @@ version = "0.0.1"
 edition = "2021"
 description = "husky for cargo"
 repository = "https://github.com/pplmx/husky-rs"
-homepage = "https://github.com/pplmx/husky-rs#readme"
 readme = "README.md"
-keywords = ["git", "hook", "cargo"]
-categories = ["development-tools"]
 license = "MIT"
 build = "build.rs"
-include = ["build.rs", "Cargo.toml", "src/**/*.rs"]
-
-[package.metadata.release]
-no-dev-version = true
 
 [build-dependencies]
 thiserror = "^1.0"
-
-[dev-dependencies]
-libc = "^0.2"
-lazy_static = "^1.5"
-semver = "^1.0"
