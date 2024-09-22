@@ -24,19 +24,28 @@ const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
 
 fn main() -> Result<()> {
-    if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
-        println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
+    if skip_hook_installation() {
         return Ok(());
     }
 
-    install_hooks().or_else(|e| {
-        eprintln!("Error during hook installation: {}", e);
-        if let HuskyError::GitDirNotFound(_) = e {
-            Ok(())
-        } else {
-            Err(e)
-        }
-    })
+    install_hooks().or_else(handle_installation_error)
+}
+
+fn skip_hook_installation() -> bool {
+    if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
+        println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
+        return true;
+    }
+    false
+}
+
+fn handle_installation_error(error: HuskyError) -> Result<()> {
+    eprintln!("Error during hook installation: {}", error);
+    if let HuskyError::GitDirNotFound(_) = error {
+        Ok(()) // Ignore missing git directories
+    } else {
+        Err(error)
+    }
 }
 
 fn install_hooks() -> Result<()> {
@@ -52,11 +61,14 @@ fn install_hooks() -> Result<()> {
     }
 
     fs::create_dir_all(&git_hooks_dir)?;
+    for entry in fs::read_dir(&user_hooks_dir)? {
+        let entry = entry?;
+        if is_valid_hook_file(&entry) {
+            install_hook(&entry.path(), &git_hooks_dir)?;
+        }
+    }
 
-    fs::read_dir(&user_hooks_dir)?
-        .filter_map(|res| res.ok())
-        .filter(is_valid_hook_file)
-        .try_for_each(|entry| install_hook(&entry.path(), &git_hooks_dir))
+    Ok(())
 }
 
 fn find_git_dir() -> Result<PathBuf> {
@@ -139,13 +151,16 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
 }
 
 fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
-    let header = format!(
-        "#!/bin/sh\n# {}\n# v{}: {}",
-        HUSKY_HEADER,
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_HOMEPAGE")
-    );
-    content.insert(0, header);
+    let header = r#"
+#!/bin/sh
+# This hook was set by husky-rs
+# v{version}: {homepage}
+"#;
+    let formatted_header = header
+        .replace("{version}", env!("CARGO_PKG_VERSION"))
+        .replace("{homepage}", env!("CARGO_PKG_HOMEPAGE"));
+
+    content.insert(0, formatted_header);
     content
 }
 
