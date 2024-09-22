@@ -21,6 +21,7 @@ type Result<T> = std::result::Result<T, HuskyError>;
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
 const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
+const HUSKY_HEADER: &str = "This hook was set by husky-rs";
 
 fn main() -> Result<()> {
     if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
@@ -28,12 +29,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    install_hooks().or_else(|e| match e {
-        HuskyError::GitDirNotFound(_) => {
-            eprintln!("Warning: Git directory not found. Skipping husky hook installation.");
+    install_hooks().or_else(|e| {
+        eprintln!("Error during hook installation: {}", e);
+        if let HuskyError::GitDirNotFound(_) = e {
             Ok(())
+        } else {
+            Err(e)
         }
-        e => Err(e),
     })
 }
 
@@ -45,8 +47,7 @@ fn install_hooks() -> Result<()> {
     let user_hooks_dir = project_root.join(HUSKY_DIR).join(HUSKY_HOOKS_DIR);
     let git_hooks_dir = git_dir.join("hooks");
 
-    if !user_hooks_dir.is_dir() {
-        eprintln!("Warning: .husky/hooks directory not found. Skipping husky hook installation.");
+    if !user_hooks_dir.exists() {
         return Ok(());
     }
 
@@ -59,21 +60,11 @@ fn install_hooks() -> Result<()> {
 }
 
 fn find_git_dir() -> Result<PathBuf> {
-    env::var("OUT_DIR")
+    let start_dir = env::var("OUT_DIR")
         .map(PathBuf::from)
-        .ok()
-        .and_then(|out_dir| find_git_dir_from_path(&out_dir))
-        .or_else(|| {
-            env::current_dir()
-                .ok()
-                .and_then(|dir| find_git_dir_from_path(&dir))
-        })
-        .ok_or_else(|| {
-            HuskyError::GitDirNotFound(
-                env::current_dir()
-                    .map_or_else(|_| String::from("unknown"), |p| p.display().to_string()),
-            )
-        })
+        .unwrap_or_else(|_| env::current_dir().expect("Failed to get current directory"));
+    find_git_dir_from_path(&start_dir)
+        .ok_or_else(|| HuskyError::GitDirNotFound(start_dir.display().to_string()))
 }
 
 fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
@@ -124,22 +115,18 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let mut content = read_file_lines(src)?;
+    let content = read_file_lines(src)?;
     if content.is_empty() {
         return Err(HuskyError::EmptyUserHook(src.to_owned()));
     }
 
-    add_husky_header(&mut content);
-    write_executable_file(&dst, &content)
+    let content_with_header = add_husky_header(content);
+    write_executable_file(&dst, &content_with_header)
 }
 
 fn hook_exists(hook: &Path) -> bool {
     fs::read_to_string(hook)
-        .map(|content| {
-            content
-                .lines()
-                .any(|line| line.contains("This hook was set by husky-rs"))
-        })
+        .map(|content| content.contains(HUSKY_HEADER))
         .unwrap_or(false)
 }
 
@@ -151,19 +138,15 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
         .map_err(HuskyError::from)
 }
 
-fn add_husky_header(content: &mut Vec<String>) {
-    if !content[0].starts_with("#!") {
-        content.insert(0, "#".to_string());
-    }
-    content.insert(1, "#".to_string());
-    content.insert(
-        2,
-        format!(
-            "# This hook was set by husky-rs v{}: {}",
-            env!("CARGO_PKG_VERSION"),
-            env!("CARGO_PKG_HOMEPAGE")
-        ),
+fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
+    let header = format!(
+        "#!/bin/sh\n# {}\n# v{}: {}",
+        HUSKY_HEADER,
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_HOMEPAGE")
     );
+    content.insert(0, header);
+    content
 }
 
 fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
@@ -177,7 +160,7 @@ fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
 #[cfg(unix)]
 fn create_executable_file(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
-    OpenOptions::new()
+    std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
