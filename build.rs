@@ -39,7 +39,9 @@ fn main() -> Result<()> {
 
 fn install_hooks() -> Result<()> {
     let git_dir = find_git_dir()?;
-    let project_root = git_dir.parent().ok_or_else(|| HuskyError::GitDirNotFound(git_dir.display().to_string()))?;
+    let project_root = git_dir
+        .parent()
+        .ok_or_else(|| HuskyError::GitDirNotFound(git_dir.display().to_string()))?;
     let user_hooks_dir = project_root.join(HUSKY_DIR).join(HUSKY_HOOKS_DIR);
     let git_hooks_dir = git_dir.join("hooks");
 
@@ -72,7 +74,9 @@ fn find_git_dir() -> Result<PathBuf> {
             return read_git_submodule(&git_dir);
         }
         if !current_dir.pop() {
-            return Err(HuskyError::GitDirNotFound(env::current_dir()?.display().to_string()));
+            return Err(HuskyError::GitDirNotFound(
+                env::current_dir()?.display().to_string(),
+            ));
         }
     }
 }
@@ -89,8 +93,10 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
     let is_executable = is_executable_file(entry);
-    let is_valid_name = matches!(entry.file_name().to_str(),
-        Some("pre-commit" | "commit-msg" | "pre-push"));
+    let is_valid_name = matches!(
+        entry.file_name().to_str(),
+        Some("pre-commit" | "commit-msg" | "pre-push")
+    );
 
     is_file && is_executable && is_valid_name
 }
@@ -98,12 +104,15 @@ fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
 #[cfg(unix)]
 fn is_executable_file(entry: &fs::DirEntry) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    entry.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+    entry
+        .metadata()
+        .map(|m| m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
 }
 
 #[cfg(not(unix))]
 fn is_executable_file(_entry: &fs::DirEntry) -> bool {
-    true  // On Windows, we consider all files as potentially executable
+    true // On Windows, we consider all files as potentially executable
 }
 
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
@@ -123,7 +132,9 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
 
 fn hook_exists(hook: &Path) -> bool {
     if let Ok(content) = fs::read_to_string(hook) {
-        content.lines().any(|line| line.contains("This hook was set by husky-rs"))
+        content
+            .lines()
+            .any(|line| line.contains("This hook was set by husky-rs"))
     } else {
         false
     }
@@ -131,7 +142,10 @@ fn hook_exists(hook: &Path) -> bool {
 
 fn read_file_lines(path: &Path) -> Result<Vec<String>> {
     let file = File::open(path)?;
-    BufReader::new(file).lines().collect::<io::Result<_>>().map_err(HuskyError::from)
+    BufReader::new(file)
+        .lines()
+        .collect::<io::Result<_>>()
+        .map_err(HuskyError::from)
 }
 
 fn add_husky_header(content: &mut Vec<String>) {
@@ -139,11 +153,14 @@ fn add_husky_header(content: &mut Vec<String>) {
         content.insert(0, "#".to_string());
     }
     content.insert(1, "#".to_string());
-    content.insert(2, format!(
-        "# This hook was set by husky-rs v{}: {}",
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_HOMEPAGE")
-    ));
+    content.insert(
+        2,
+        format!(
+            "# This hook was set by husky-rs v{}: {}",
+            env!("CARGO_PKG_VERSION"),
+            env!("CARGO_PKG_HOMEPAGE")
+        ),
+    );
 }
 
 fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
