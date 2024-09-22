@@ -90,7 +90,7 @@ fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
     let is_executable = is_executable_file(entry);
     let is_valid_name = matches!(entry.file_name().to_str(),
-        Some("pre-push" | "pre-commit" | "post-merge" | "pre-rebase" | "post-checkout" | "post-merge" | "pre-auto-gc"));
+        Some("pre-commit" | "commit-msg" | "pre-push"));
 
     is_file && is_executable && is_valid_name
 }
