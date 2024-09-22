@@ -20,6 +20,7 @@ type Result<T> = std::result::Result<T, HuskyError>;
 
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
+const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 
 fn main() -> Result<()> {
     if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
@@ -27,14 +28,13 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    match install_hooks() {
-        Ok(_) => Ok(()),
-        Err(HuskyError::GitDirNotFound(_)) => {
+    install_hooks().or_else(|e| match e {
+        HuskyError::GitDirNotFound(_) => {
             eprintln!("Warning: Git directory not found. Skipping husky hook installation.");
             Ok(())
         }
-        Err(e) => Err(e),
-    }
+        e => Err(e),
+    })
 }
 
 fn install_hooks() -> Result<()> {
@@ -54,9 +54,8 @@ fn install_hooks() -> Result<()> {
 
     for entry in fs::read_dir(&user_hooks_dir)? {
         let entry = entry?;
-        let path = entry.path();
         if is_valid_hook_file(&entry) {
-            install_hook(&path, &git_hooks_dir)?;
+            install_hook(&entry.path(), &git_hooks_dir)?;
         }
     }
 
@@ -91,14 +90,9 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
 }
 
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
-    let is_file = entry.file_type().map(|ft| ft.is_file()).unwrap_or(false);
-    let is_executable = is_executable_file(entry);
-    let is_valid_name = matches!(
-        entry.file_name().to_str(),
-        Some("pre-commit" | "commit-msg" | "pre-push")
-    );
-
-    is_file && is_executable && is_valid_name
+    entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
+        && is_executable_file(entry)
+        && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
 }
 
 #[cfg(unix)]
@@ -131,13 +125,13 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
 }
 
 fn hook_exists(hook: &Path) -> bool {
-    if let Ok(content) = fs::read_to_string(hook) {
-        content
-            .lines()
-            .any(|line| line.contains("This hook was set by husky-rs"))
-    } else {
-        false
-    }
+    fs::read_to_string(hook)
+        .map(|content| {
+            content
+                .lines()
+                .any(|line| line.contains("This hook was set by husky-rs"))
+        })
+        .unwrap_or(false)
 }
 
 fn read_file_lines(path: &Path) -> Result<Vec<String>> {
