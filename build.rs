@@ -12,8 +12,6 @@ enum HuskyError {
     Io(#[from] io::Error),
     #[error("Environment variable error: {0}")]
     Env(#[from] env::VarError),
-    #[error("User hooks directory is invalid: '{0}'")]
-    InvalidUserHooksDir(PathBuf),
     #[error("User hook script is empty: '{0}'")]
     EmptyUserHook(PathBuf),
 }
@@ -29,7 +27,14 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    install_hooks()
+    match install_hooks() {
+        Ok(_) => Ok(()),
+        Err(HuskyError::GitDirNotFound(_)) => {
+            eprintln!("Warning: Git directory not found. Skipping husky hook installation.");
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn install_hooks() -> Result<()> {
@@ -39,7 +44,8 @@ fn install_hooks() -> Result<()> {
     let git_hooks_dir = git_dir.join("hooks");
 
     if !user_hooks_dir.is_dir() {
-        return Err(HuskyError::InvalidUserHooksDir(user_hooks_dir));
+        eprintln!("Warning: .husky/hooks directory not found. Skipping husky hook installation.");
+        return Ok(());
     }
 
     fs::create_dir_all(&git_hooks_dir)?;
