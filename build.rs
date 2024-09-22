@@ -63,19 +63,32 @@ fn install_hooks() -> Result<()> {
 }
 
 fn find_git_dir() -> Result<PathBuf> {
-    let mut current_dir = env::current_dir()?;
+    // First, try to use OUT_DIR if available
+    if let Ok(out_dir) = env::var("OUT_DIR") {
+        let out_path = PathBuf::from(out_dir);
+        if let Some(git_dir) = find_git_dir_from_path(&out_path) {
+            return Ok(git_dir);
+        }
+    }
+
+    // If OUT_DIR is not set or doesn't contain a .git directory, fall back to the current directory
+    let current_dir = env::current_dir()?;
+    find_git_dir_from_path(&current_dir)
+        .ok_or_else(|| HuskyError::GitDirNotFound(current_dir.display().to_string()))
+}
+
+fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
+    let mut current_dir = start_path.to_path_buf();
     loop {
         let git_dir = current_dir.join(".git");
         if git_dir.is_dir() {
-            return Ok(git_dir);
+            return Some(git_dir);
         }
         if git_dir.is_file() {
-            return read_git_submodule(&git_dir);
+            return read_git_submodule(&git_dir).ok();
         }
         if !current_dir.pop() {
-            return Err(HuskyError::GitDirNotFound(
-                env::current_dir()?.display().to_string(),
-            ));
+            return None;
         }
     }
 }
