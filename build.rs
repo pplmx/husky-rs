@@ -52,45 +52,41 @@ fn install_hooks() -> Result<()> {
 
     fs::create_dir_all(&git_hooks_dir)?;
 
-    for entry in fs::read_dir(&user_hooks_dir)? {
-        let entry = entry?;
-        if is_valid_hook_file(&entry) {
-            install_hook(&entry.path(), &git_hooks_dir)?;
-        }
-    }
-
-    Ok(())
+    fs::read_dir(&user_hooks_dir)?
+        .filter_map(|res| res.ok())
+        .filter(is_valid_hook_file)
+        .try_for_each(|entry| install_hook(&entry.path(), &git_hooks_dir))
 }
 
 fn find_git_dir() -> Result<PathBuf> {
-    // First, try to use OUT_DIR if available
-    if let Ok(out_dir) = env::var("OUT_DIR") {
-        let out_path = PathBuf::from(out_dir);
-        if let Some(git_dir) = find_git_dir_from_path(&out_path) {
-            return Ok(git_dir);
-        }
-    }
-
-    // If OUT_DIR is not set or doesn't contain a .git directory, fall back to the current directory
-    let current_dir = env::current_dir()?;
-    find_git_dir_from_path(&current_dir)
-        .ok_or_else(|| HuskyError::GitDirNotFound(current_dir.display().to_string()))
+    env::var("OUT_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .and_then(|out_dir| find_git_dir_from_path(&out_dir))
+        .or_else(|| {
+            env::current_dir()
+                .ok()
+                .and_then(|dir| find_git_dir_from_path(&dir))
+        })
+        .ok_or_else(|| {
+            HuskyError::GitDirNotFound(
+                env::current_dir()
+                    .map_or_else(|_| String::from("unknown"), |p| p.display().to_string()),
+            )
+        })
 }
 
 fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
-    let mut current_dir = start_path.to_path_buf();
-    loop {
-        let git_dir = current_dir.join(".git");
+    start_path.ancestors().find_map(|path| {
+        let git_dir = path.join(".git");
         if git_dir.is_dir() {
-            return Some(git_dir);
+            Some(git_dir)
+        } else if git_dir.is_file() {
+            read_git_submodule(&git_dir).ok()
+        } else {
+            None
         }
-        if git_dir.is_file() {
-            return read_git_submodule(&git_dir).ok();
-        }
-        if !current_dir.pop() {
-            return None;
-        }
-    }
+    })
 }
 
 fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
