@@ -64,6 +64,7 @@ fn find_git_dir() -> Result<PathBuf> {
     let start_dir = env::var("OUT_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| env::current_dir().expect("Failed to get current directory"));
+
     find_git_dir_from_path(&start_dir)
         .ok_or_else(|| HuskyError::GitDirNotFound(start_dir.display().to_string()))
 }
@@ -93,7 +94,9 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
         && is_executable_file(entry)
-        && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
+        && VALID_HOOK_NAMES
+            .iter()
+            .any(|&name| entry.file_name() == name)
 }
 
 #[cfg(unix)]
