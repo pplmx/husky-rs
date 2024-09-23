@@ -162,8 +162,12 @@ fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
     let header = format!(
         r#"
 #!/bin/sh
+
+#
 # This hook was set by husky-rs
 # v{}: {}
+#
+
 "#,
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_HOMEPAGE")
