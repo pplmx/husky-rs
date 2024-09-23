@@ -4,7 +4,7 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-// Custom error types for better error handling
+// Custom error types for better error handling and more informative messages
 #[derive(Error, Debug)]
 enum HuskyError {
     #[error("Git directory not found in '{0}' or its parent directories")]
@@ -17,26 +17,28 @@ enum HuskyError {
     EmptyUserHook(PathBuf),
 }
 
+// Type alias for easier Result usage throughout the code
 type Result<T> = std::result::Result<T, HuskyError>;
 
-// Constants for directory and file names
+// Constants for directory and file names used in the project
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
 const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
 
 fn main() -> Result<()> {
-    // Check if hook installation should be skipped
+    // Check if hook installation should be skipped based on environment variable
     if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
         println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
         return Ok(());
     }
 
+    // Attempt to install hooks, and handle errors
+    // Only ignore GitDirNotFound errors, as they might be expected in some scenarios
     install_hooks().or_else(|error| {
         eprintln!("Error during hook installation: {}", error);
-        // Only ignore GitDirNotFound errors
         matches!(error, HuskyError::GitDirNotFound(_))
-            .then(|| ())
+            .then_some(())
             .ok_or(error)
     })
 }
@@ -55,7 +57,10 @@ fn install_hooks() -> Result<()> {
         return Ok(());
     }
 
+    // Create git hooks directory if it doesn't exist
     fs::create_dir_all(&git_hooks_dir)?;
+
+    // Iterate through user hooks directory and install valid hooks
     for entry in fs::read_dir(&user_hooks_dir)? {
         let entry = entry?;
         if is_valid_hook_file(&entry) {
