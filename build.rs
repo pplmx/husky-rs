@@ -24,28 +24,17 @@ const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
 
 fn main() -> Result<()> {
-    if skip_hook_installation() {
+    if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
+        println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
         return Ok(());
     }
 
-    install_hooks().or_else(handle_installation_error)
-}
-
-fn skip_hook_installation() -> bool {
-    if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
-        println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
-        return true;
-    }
-    false
-}
-
-fn handle_installation_error(error: HuskyError) -> Result<()> {
-    eprintln!("Error during hook installation: {}", error);
-    if let HuskyError::GitDirNotFound(_) = error {
-        Ok(()) // Ignore missing git directories
-    } else {
-        Err(error)
-    }
+    install_hooks().or_else(|error| {
+        eprintln!("Error during hook installation: {}", error);
+        matches!(error, HuskyError::GitDirNotFound(_))
+            .then(|| ())
+            .ok_or(error)
+    })
 }
 
 fn install_hooks() -> Result<()> {
@@ -151,16 +140,17 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
 }
 
 fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
-    let header = r#"
+    let header = format!(
+        r#"
 #!/bin/sh
 # This hook was set by husky-rs
-# v{version}: {homepage}
-"#;
-    let formatted_header = header
-        .replace("{version}", env!("CARGO_PKG_VERSION"))
-        .replace("{homepage}", env!("CARGO_PKG_HOMEPAGE"));
+# v{}: {}
+"#,
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_HOMEPAGE")
+    );
 
-    content.insert(0, formatted_header);
+    content.insert(0, header);
     content
 }
 
