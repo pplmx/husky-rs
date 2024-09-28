@@ -4,7 +4,6 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-// Custom error types for better error handling and more informative messages
 #[derive(Error, Debug)]
 enum HuskyError {
     #[error("Git directory not found in '{0}' or its parent directories")]
@@ -17,24 +16,19 @@ enum HuskyError {
     EmptyUserHook(PathBuf),
 }
 
-// Type alias for easier Result usage throughout the code
 type Result<T> = std::result::Result<T, HuskyError>;
 
-// Constants for directory and file names used in the project
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
 const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
 
 fn main() -> Result<()> {
-    // Check if hook installation should be skipped based on environment variable
     if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
         println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
         return Ok(());
     }
 
-    // Attempt to install hooks, and handle errors
-    // Only ignore GitDirNotFound errors, as they might be expected in some scenarios
     install_hooks().or_else(|error| {
         eprintln!("Error during hook installation: {}", error);
         matches!(error, HuskyError::GitDirNotFound(_))
@@ -43,7 +37,6 @@ fn main() -> Result<()> {
     })
 }
 
-// Main function to install hooks
 fn install_hooks() -> Result<()> {
     let git_dir = find_git_dir()?;
     let project_root = git_dir
@@ -52,15 +45,12 @@ fn install_hooks() -> Result<()> {
     let user_hooks_dir = project_root.join(HUSKY_DIR).join(HUSKY_HOOKS_DIR);
     let git_hooks_dir = git_dir.join("hooks");
 
-    // Skip if user hooks directory doesn't exist
     if !user_hooks_dir.exists() {
         return Ok(());
     }
 
-    // Create git hooks directory if it doesn't exist
     fs::create_dir_all(&git_hooks_dir)?;
 
-    // Iterate through user hooks directory and install valid hooks
     for entry in fs::read_dir(&user_hooks_dir)? {
         let entry = entry?;
         if is_valid_hook_file(&entry) {
@@ -71,7 +61,6 @@ fn install_hooks() -> Result<()> {
     Ok(())
 }
 
-// Find the .git directory starting from the current directory
 fn find_git_dir() -> Result<PathBuf> {
     let start_dir = env::var("OUT_DIR")
         .map(PathBuf::from)
@@ -81,7 +70,6 @@ fn find_git_dir() -> Result<PathBuf> {
         .ok_or_else(|| HuskyError::GitDirNotFound(start_dir.display().to_string()))
 }
 
-// Recursively search for .git directory in parent directories
 fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
     start_path.ancestors().find_map(|path| {
         let git_dir = path.join(".git");
@@ -95,7 +83,6 @@ fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
     })
 }
 
-// Read the .git file for submodules
 fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
     let content = fs::read_to_string(git_file)?;
     let git_dir = PathBuf::from(content.trim_end_matches(&['\n', '\r']));
@@ -105,7 +92,6 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
     Ok(git_dir)
 }
 
-// Check if the file is a valid hook file
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
         && is_executable_file(entry)
@@ -114,7 +100,6 @@ fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
             .any(|&name| entry.file_name() == name)
 }
 
-// Check if the file is executable (Unix-specific)
 #[cfg(unix)]
 fn is_executable_file(entry: &fs::DirEntry) -> bool {
     use std::os::unix::fs::PermissionsExt;
@@ -124,13 +109,11 @@ fn is_executable_file(entry: &fs::DirEntry) -> bool {
         .unwrap_or(false)
 }
 
-// On Windows, consider all files as potentially executable
 #[cfg(not(unix))]
 fn is_executable_file(_entry: &fs::DirEntry) -> bool {
     true
 }
 
-// Install a single hook
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
     let dst = dst_dir.join(src.file_name().unwrap());
     if hook_exists(&dst) {
@@ -146,30 +129,61 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
     write_executable_file(&dst, &content_with_header)
 }
 
-// Check if a hook already exists and contains the Husky header
 fn hook_exists(hook: &Path) -> bool {
     fs::read_to_string(hook)
         .map(|content| content.contains(HUSKY_HEADER))
         .unwrap_or(false)
 }
 
-// Read file contents as lines
 fn read_file_lines(path: &Path) -> Result<Vec<String>> {
-    let file = File::open(path)?;
-    BufReader::new(file)
+    let file = File::open(path).map_err(HuskyError::from)?; // Convert io::Error to HuskyError
+    let reader = BufReader::new(file);
+
+    let mut lines: Vec<String> = reader
         .lines()
-        .collect::<io::Result<_>>()
-        .map_err(HuskyError::from)
+        .filter_map(|line| line.map_err(HuskyError::from).ok()) // Handle HuskyError
+        .collect();
+
+    // Remove leading empty lines
+    while lines.first().map_or(false, |line| line.trim().is_empty()) {
+        lines.remove(0);
+    }
+
+    // Remove trailing empty lines
+    while lines.last().map_or(false, |line| line.trim().is_empty()) {
+        lines.pop();
+    }
+
+    // Ensure the last line is empty if no other lines exist
+    if lines.is_empty() || !lines.last().map_or(false, |line| line.trim().is_empty()) {
+        lines.push(String::new());
+    }
+
+    Ok(lines)
 }
 
-// Add Husky header to hook content
 fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
+    let shebangs = ["#!/bin/sh", "#!/usr/bin/env sh", "#!/usr/bin/env bash"];
+
+    let mut shebang = "#!/usr/bin/env bash".to_string(); // 默认值
+    if let Some(first_line) = content.first() {
+        if shebangs.contains(&first_line.trim()) {
+            shebang = first_line.trim().to_string();
+            content.remove(0); // 在确认 shebang 后再移除
+            while content.first().map_or(false, |line| line.trim().is_empty()) {
+                content.remove(0);
+            }
+        }
+    }
+
     let header = format!(
-        r#"#
+        "{}
+#
 # This hook was set by husky-rs
 # v{}: {}
 #
-"#,
+",
+        shebang,
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_HOMEPAGE")
     );
@@ -178,7 +192,6 @@ fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
     content
 }
 
-// Write hook content to file and make it executable
 fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
     let mut file = create_executable_file(path)?;
     for line in content {
@@ -187,7 +200,6 @@ fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
     Ok(())
 }
 
-// Create an executable file (Unix-specific)
 #[cfg(unix)]
 fn create_executable_file(path: &Path) -> io::Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
@@ -199,7 +211,6 @@ fn create_executable_file(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-// Create a file (non-Unix systems)
 #[cfg(not(unix))]
 fn create_executable_file(path: &Path) -> io::Result<File> {
     File::create(path)
