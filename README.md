@@ -11,7 +11,7 @@
 
 ## Installation
 
-Add husky-rs to your `Cargo.toml`:
+Add `husky-rs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
