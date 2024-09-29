@@ -116,9 +116,6 @@ fn is_executable_file(_entry: &fs::DirEntry) -> bool {
 
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
     let dst = dst_dir.join(src.file_name().unwrap());
-    if hook_exists(&dst) {
-        return Ok(());
-    }
 
     let content = read_file_lines(src)?;
     if content.is_empty() {
@@ -127,12 +124,6 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
 
     let content_with_header = add_husky_header(content);
     write_executable_file(&dst, &content_with_header)
-}
-
-fn hook_exists(hook: &Path) -> bool {
-    fs::read_to_string(hook)
-        .map(|content| content.contains(HUSKY_HEADER))
-        .unwrap_or(false)
 }
 
 fn read_file_lines(path: &Path) -> Result<Vec<String>> {
@@ -179,11 +170,12 @@ fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
     let header = format!(
         "{}
 #
-# This hook was set by husky-rs
+# {}
 # v{}: {}
 #
 ",
         shebang,
+        HUSKY_HEADER,
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_HOMEPAGE")
     );
