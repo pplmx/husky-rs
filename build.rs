@@ -22,6 +22,7 @@ const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
 const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
+const SHEBANGS: [&str; 3] = ["#!/bin/sh", "#!/usr/bin/env sh", "#!/usr/bin/env bash"];
 
 fn main() -> Result<()> {
     if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
@@ -127,7 +128,7 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
 }
 
 fn read_file_lines(path: &Path) -> Result<Vec<String>> {
-    let file = File::open(path).map_err(HuskyError::from)?; // Convert io::Error to HuskyError
+    let file = File::open(path)?;
     let reader = BufReader::new(file);
 
     let mut lines: Vec<String> = reader
@@ -154,18 +155,16 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
 }
 
 fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
-    let shebangs = ["#!/bin/sh", "#!/usr/bin/env sh", "#!/usr/bin/env bash"];
+    let shebang = content
+        .first()
+        .filter(|line| SHEBANGS.contains(&line.trim()))
+        .map(|line| line.trim().to_string())
+        .unwrap_or_else(|| "#!/usr/bin/env bash".to_string());
 
-    let mut shebang = "#!/usr/bin/env bash".to_string(); // 默认值
-    if let Some(first_line) = content.first() {
-        if shebangs.contains(&first_line.trim()) {
-            shebang = first_line.trim().to_string();
-            content.remove(0); // 在确认 shebang 后再移除
-            while content.first().map_or(false, |line| line.trim().is_empty()) {
-                content.remove(0);
-            }
-        }
-    }
+    content = content
+        .into_iter()
+        .skip_while(|line| SHEBANGS.contains(&line.trim()) || line.trim().is_empty())
+        .collect();
 
     let header = format!(
         "{}
@@ -180,8 +179,9 @@ fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
         env!("CARGO_PKG_HOMEPAGE")
     );
 
-    content.insert(0, header);
-    content
+    let mut result = vec![header];
+    result.extend(content);
+    result
 }
 
 fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
