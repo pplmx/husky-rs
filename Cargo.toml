@@ -1,6 +1,6 @@
 [package]
 name = "husky-rs"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 description = "husky for cargo"
 repository = "https://github.com/pplmx/husky-rs"
@@ -8,6 +8,3 @@ homepage = "https://github.com/pplmx/husky-rs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 build = "build.rs"
-
-[build-dependencies]
-thiserror = "^1.0"

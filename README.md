@@ -20,7 +20,7 @@ Add `husky-rs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-husky-rs = "0.0.1"
+husky-rs = "0.1.0"
 ```
 
 ## Usage

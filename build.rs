@@ -2,18 +2,42 @@ use std::env;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 enum HuskyError {
-    #[error("Git directory not found in '{0}' or its parent directories")]
     GitDirNotFound(String),
-    #[error("IO error: {0}")]
-    Io(#[from] io::Error),
-    #[error("Environment variable error: {0}")]
-    Env(#[from] env::VarError),
-    #[error("User hook script is empty: '{0}'")]
+    Io(io::Error),
+    Env(env::VarError),
     EmptyUserHook(PathBuf),
+}
+
+impl std::fmt::Display for HuskyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HuskyError::GitDirNotFound(path) => write!(
+                f,
+                "Git directory not found in '{}' or its parent directories",
+                path
+            ),
+            HuskyError::Io(err) => write!(f, "IO error: {}", err),
+            HuskyError::Env(err) => write!(f, "Environment variable error: {}", err),
+            HuskyError::EmptyUserHook(path) => {
+                write!(f, "User hook script is empty: '{}'", path.display())
+            }
+        }
+    }
+}
+
+impl From<io::Error> for HuskyError {
+    fn from(err: io::Error) -> Self {
+        HuskyError::Io(err)
+    }
+}
+
+impl From<env::VarError> for HuskyError {
+    fn from(err: env::VarError) -> Self {
+        HuskyError::Env(err)
+    }
 }
 
 type Result<T> = std::result::Result<T, HuskyError>;
@@ -116,10 +140,7 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
-    let mut lines: Vec<String> = reader
-        .lines()
-        .filter_map(|line| line.map_err(HuskyError::from).ok()) // Handle HuskyError
-        .collect();
+    let mut lines: Vec<String> = reader.lines().collect::<io::Result<_>>()?;
 
     // Remove leading empty lines
     while lines.first().map_or(false, |line| line.trim().is_empty()) {
