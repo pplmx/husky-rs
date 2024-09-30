@@ -1,0 +1,13 @@
+services:
+    husky-rs:
+        build: .
+        image: husky-rs
+        ports:
+            - 8000:8000
+
+networks:
+    husky-rs-net:
+        name: husky-rs-net
+        ipam:
+            config:
+                -   subnet: 172.16.238.0/24

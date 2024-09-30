@@ -1,0 +1,54 @@
+name: Build and Push Docker Image
+
+on:
+    push:
+        tags:
+            - '^v[0-9]+\.[0-9]+\.[0-9]+.*$'
+
+jobs:
+    docker:
+        runs-on: ubuntu-latest
+        steps:
+            -
+                name: Checkout
+                uses: actions/checkout@v4
+            -
+                name: Acquire tag name
+                run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#refs/*/}" >> $GITHUB_ENV
+            -
+                name: Set up QEMU
+                uses: docker/setup-qemu-action@v3
+            -
+                name: Set up Docker Buildx
+                uses: docker/setup-buildx-action@v3
+            -
+                name: Login to GitHub Container Registry
+                uses: docker/login-action@v3
+                with:
+                    registry: ghcr.io
+                    username: ${{ github.repository_owner }}
+                    password: ${{ secrets.GITHUB_TOKEN }}
+            -
+                name: Build and Export to Docker
+                uses: docker/build-push-action@v6
+                with:
+                    context: .
+                    load: true
+                    tags: |
+                        ghcr.io/pplmx/husky-rs:latest
+                        ghcr.io/pplmx/husky-rs:${GITHUB_REF_NAME:1}
+            -
+                name: Test it before Push
+                run: |
+                    docker run --rm ghcr.io/pplmx/husky-rs:latest
+                    docker run --rm ghcr.io/pplmx/husky-rs:${GITHUB_REF_NAME:1}
+            -
+                name: Build and Push
+                uses: docker/build-push-action@v6
+                with:
+                    context: .
+                    platforms: linux/amd64,linux/arm64
+                    push: true
+                    tags: |
+                        ghcr.io/pplmx/husky-rs:latest
+                        ghcr.io/pplmx/husky-rs:${GITHUB_REF_NAME:1}
