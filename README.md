@@ -20,7 +20,7 @@
 
    ```toml
    [dev-dependencies]
-   husky-rs = "0.1.0"
+   husky-rs = "0.1.1"
    ```
 
 2. Create hooks directory:

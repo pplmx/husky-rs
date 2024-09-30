@@ -105,6 +105,7 @@ commit_parsers = [
   { message = "^test", group = "<!-- 6 -->🧪 Testing" },
   { message = "^chore\\(release\\): prepare for", skip = true },
   { message = "^chore\\(release-bot\\): prepare for", skip = true },
+  { message = "^chore: prepare for", skip = true },
   { message = "^chore: bump version to", skip = true },
   { message = "^chore\\(deps.*\\)", skip = true },
   { message = "^chore\\(pr\\)", skip = true },
