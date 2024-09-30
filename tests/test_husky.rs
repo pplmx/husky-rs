@@ -1,8 +1,18 @@
 use std::env;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+fn create_temp_dir(prefix: Option<&str>) -> Result<PathBuf, Error> {
+    let prefix = prefix.unwrap_or("tmp-");
+    let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let temp_dir = env::temp_dir().join(format!("{}{}", prefix, time_since_epoch.as_secs()));
+
+    fs::create_dir_all(&temp_dir)?;
+    Ok(temp_dir)
+}
 
 fn get_relative_path(from: &Path, to: &Path) -> PathBuf {
     let from_abs = fs::canonicalize(from).unwrap();
@@ -38,8 +48,7 @@ fn create_hook(dir: &Path, name: &str, content: &str) -> std::io::Result<()> {
 #[test]
 fn test_husky_rs_integration() -> std::io::Result<()> {
     // Create a temporary directory for our test project
-    let temp_dir = env::temp_dir().join("husky-rs-test");
-    fs::create_dir_all(&temp_dir)?;
+    let temp_dir = create_temp_dir(Some("husky-rs-test-"))?;
     let project_path = temp_dir.as_path();
 
     println!("Project path: {}", project_path.display());
