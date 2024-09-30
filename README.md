@@ -37,9 +37,15 @@
 
 4. Install hooks:
 
+   > **Note:** Due to the execution mechanism of `build.rs`, running `cargo clean` is required when installing or updating hooks.
+
    ```sh
-   cargo clean && cargo build
+   cargo clean && cargo test
    ```
+
+---
+
+**Tip:** If you add this library to the `[dependencies]` section, both `cargo build` and `cargo test` will work. However, if it's added under `[dev-dependencies]`, only `cargo test` will function as expected.
 
 ## Usage
 

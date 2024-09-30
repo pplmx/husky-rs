@@ -67,7 +67,7 @@ fn test_husky_rs_integration() -> std::io::Result<()> {
     let cargo_toml_path = project_path.join("Cargo.toml");
     let mut cargo_toml = fs::read_to_string(&cargo_toml_path)?;
     cargo_toml.push_str(&format!(
-        "husky-rs = {{ path = {:?} }}\n",
+        "\n[dev-dependencies]\nhusky-rs = {{ path = {:?} }}\n",
         relative_crate_path
     ));
     fs::write(&cargo_toml_path, cargo_toml)?;
@@ -87,7 +87,7 @@ echo "This is a test hook"
 
     // Run cargo build
     Command::new("cargo")
-        .arg("build")
+        .arg("test")
         .current_dir(project_path)
         .status()?;
 
