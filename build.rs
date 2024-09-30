@@ -95,24 +95,9 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
 
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
-        && is_executable_file(entry)
         && VALID_HOOK_NAMES
             .iter()
             .any(|&name| entry.file_name() == name)
-}
-
-#[cfg(unix)]
-fn is_executable_file(entry: &fs::DirEntry) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    entry
-        .metadata()
-        .map(|m| m.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
-}
-
-#[cfg(not(unix))]
-fn is_executable_file(_entry: &fs::DirEntry) -> bool {
-    true
 }
 
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
