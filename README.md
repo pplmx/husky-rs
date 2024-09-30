@@ -5,7 +5,7 @@
 [![Documentation](https://docs.rs/husky-rs/badge.svg)](https://docs.rs/husky-rs)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 
-`husky-rs` is a `husky-like` Git hooks management tool for Rust projects.
+`husky-rs` is a Git hooks management tool for Rust projects, inspired by Husky.
 
 ## Features
 
@@ -14,50 +14,38 @@
 - **Support for all Git hooks**
 - **Cross-platform compatibility** (Unix-like systems and Windows)
 
-## Installation
+## Quick Start
 
-To use `husky-rs`, add it to your `Cargo.toml` file:
+1. Add to your `Cargo.toml`:
 
-```toml
-[dev-dependencies]
-husky-rs = "0.1.0"
-```
+   ```toml
+   [dev-dependencies]
+   husky-rs = "0.1.0"
+   ```
 
-## Usage
-
-1. Create a `.husky/hooks` directory at your project root:
+2. Create hooks directory:
 
    ```sh
    mkdir -p .husky/hooks
    ```
 
-2. Add Git hooks in the `.husky/hooks` directory. For example, a `pre-commit` hook:
+3. Add a hook (e.g., `pre-commit`):
 
    ```sh
-   cat << EOF > .husky/hooks/pre-commit
-   #!/bin/sh
-
-   echo "hi, pre-commit"
-
-   EOF
-
+   echo '#!/bin/sh\necho "Running pre-commit hook"' > .husky/hooks/pre-commit
    ```
 
-3. Install the hooks by running `cargo build` or `cargo test`:
+4. Install hooks:
 
    ```sh
-   # If you've used husky-rs before, ensure a clean build
-   cargo clean
-   cargo build
-   # or
-   # cargo test
+   cargo clean && cargo build
    ```
 
-> **Note:** `cargo clean` is required when any change is made to `.husky/hooks`.
+## Usage
 
-## Supported Git Hooks
+### Supported Git Hooks
 
-`husky-rs` supports all Git hooks, such as:
+`husky-rs` supports all Git hooks, including:
 
 - `pre-commit`
 - `prepare-commit-msg`
@@ -65,13 +53,11 @@ husky-rs = "0.1.0"
 - `post-commit`
 - `pre-push`
 
-Simply create the corresponding file in the `.husky/hooks` directory, ensuring the file name matches the Git hook name exactly.
+For a full list, see the [Git documentation](https://git-scm.com/docs/githooks).
 
-For a full list of available Git hooks, see the [Git documentation](https://git-scm.com/docs/githooks).
+### Configuration
 
-## Configuration
-
-By default, `hooks` are installed during the `build process`. To skip hook installation, set the `CARGO_HUSKY_DONT_INSTALL_HOOKS` environment variable:
+To skip hook installation:
 
 ```sh
 CARGO_HUSKY_DONT_INSTALL_HOOKS=1 cargo build
@@ -79,9 +65,9 @@ CARGO_HUSKY_DONT_INSTALL_HOOKS=1 cargo build
 
 ## Best Practices
 
-- Keep your hooks lightweight to avoid slowing down Git operations.
-- Use hooks for tasks such as running tests, linting code, and validating commit messages.
-- If a hook script exits with a non-zero status, Git will abort the operation. Use this to enforce quality checks.
+- Keep hooks lightweight to avoid slowing down Git operations
+- Use hooks for tasks like running tests, linting code, and validating commit messages
+- Non-zero exit status in a hook script will abort the Git operation
 
 ## Development
 
