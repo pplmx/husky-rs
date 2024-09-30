@@ -34,9 +34,13 @@ husky-rs = "0.1.0"
 2. Add Git hooks in the `.husky/hooks` directory. For example, a `pre-commit` hook:
 
    ```sh
-   echo '#!/bin/sh
-   echo "Running pre-commit hook"
-   cargo test' > .husky/hooks/pre-commit
+   cat << EOF > .husky/hooks/pre-commit
+   #!/bin/sh
+
+   echo "hi, pre-commit"
+
+   EOF
+
    ```
 
 3. Install the hooks by running `cargo build` or `cargo test`:
