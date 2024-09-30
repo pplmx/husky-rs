@@ -75,13 +75,30 @@ CARGO_HUSKY_DONT_INSTALL_HOOKS=1 cargo build
 - Use hooks for tasks like running tests, linting code, checking commit message format, etc.
 - If a hook script exits with a non-zero status, Git will abort the operation. Use this to enforce quality checks.
 
+## Development
+
+For information on setting up the development environment, running tests, and contributing to the project, please refer to our [Development Guide](docs/development.md).
+
+## Troubleshooting
+
+If you encounter any issues while using `husky-rs`, please check our [Troubleshooting Guide](docs/troubleshooting.md) for common problems and their solutions. If you can't find a solution to your problem, please [open an issue](https://github.com/pplmx/husky-rs/issues) on our GitHub repository.
+
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, or suggest improvements.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+## Changelog
+
+For a detailed history of changes to this project, please refer to our [CHANGELOG.md](CHANGELOG.md).
 
 ## Acknowledgments
 
