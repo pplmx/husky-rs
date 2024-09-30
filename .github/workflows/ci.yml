@@ -8,12 +8,8 @@ on:
     workflow_dispatch:
 
 jobs:
-    ci:
-        runs-on: ${{ matrix.os }}
-        strategy:
-            matrix:
-                os: [ ubuntu-latest, windows-latest, macos-latest ]
-
+    lint:
+        runs-on: ubuntu-latest
         steps:
             -   uses: actions/checkout@v4
 
@@ -35,6 +31,21 @@ jobs:
                 env:
                     RUSTDOCFLAGS: -D warnings
                 run: cargo doc --no-deps --document-private-items --all-features --workspace --examples
+
+    test:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ ubuntu-latest, windows-latest, macos-latest ]
+
+        steps:
+            -   uses: actions/checkout@v4
+
+            -   name: Install Rust toolchain
+                uses: dtolnay/rust-toolchain@stable
+
+            -   name: Cache Rust dependencies
+                uses: Swatinem/rust-cache@v2
 
             -   name: Run tests
                 run: cargo test --all-features --workspace
