@@ -19,7 +19,7 @@
 To use `husky-rs`, add it to your `Cargo.toml` file:
 
 ```toml
-[dependencies]
+[dev-dependencies]
 husky-rs = "0.1.0"
 ```
 
