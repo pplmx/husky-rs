@@ -46,7 +46,16 @@ const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
 const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
-const SHEBANGS: [&str; 3] = ["#!/bin/sh", "#!/usr/bin/env sh", "#!/usr/bin/env bash"];
+const SHEBANGS: [&str; 8] = [
+    "#!/bin/sh",
+    "#!/usr/bin/env sh",
+    "#!/usr/bin/env bash",
+    "#!/usr/bin/env python",
+    "#!/usr/bin/env python3",
+    "#!/usr/bin/env ruby",
+    "#!/usr/bin/env node",
+    "#!/usr/bin/env perl"
+];
 
 fn main() -> Result<()> {
     if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
