@@ -3,6 +3,7 @@ name = "husky-rs"
 version = "0.1.2"
 edition = "2021"
 description = "husky for cargo"
+authors = ["Mystic"]
 repository = "https://github.com/pplmx/husky-rs"
 homepage = "https://github.com/pplmx/husky-rs"
 readme = "README.md"
