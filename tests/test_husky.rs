@@ -79,7 +79,10 @@ impl TestProject {
         // Add husky-rs to the suitable section
         let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", relative_crate_path);
         if let Some(pos) = cargo_toml.find(&format!("[{}]", dependencies_type)) {
-            let insert_pos = cargo_toml[pos..].find('\n').map(|p| p + pos + 1).unwrap_or(cargo_toml.len());
+            let insert_pos = cargo_toml[pos..]
+                .find('\n')
+                .map(|p| p + pos + 1)
+                .unwrap_or(cargo_toml.len());
             cargo_toml.insert_str(insert_pos, &husky_rs_dep);
         }
 
