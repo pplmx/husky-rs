@@ -1,15 +1,13 @@
 use std::env;
-use std::fs::{self, File};
-use std::io::{Error, Write};
+use std::fs::{self};
+use std::io::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-fn create_temp_dir(prefix: Option<&str>) -> Result<PathBuf, Error> {
-    let prefix = prefix.unwrap_or("tmp-");
+fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let temp_dir = env::temp_dir().join(format!("{}{}", prefix, time_since_epoch.as_secs()));
-
     fs::create_dir_all(&temp_dir)?;
     Ok(temp_dir)
 }
@@ -38,21 +36,15 @@ fn get_relative_path(from: &Path, to: &Path) -> PathBuf {
     result
 }
 
-fn create_hook(dir: &Path, name: &str, content: &str) -> std::io::Result<()> {
-    let path = dir.join(name);
-    let mut file = File::create(&path)?;
-    file.write_all(content.as_bytes())?;
-    Ok(())
-}
-
 struct TestProject {
     path: PathBuf,
 }
 
 impl TestProject {
     fn new(prefix: &str) -> Result<Self, Error> {
-        let temp_dir = create_temp_dir(Some(prefix))?;
-        let project = TestProject { path: temp_dir };
+        let project = TestProject {
+            path: create_temp_dir(prefix)?,
+        };
         project.init()?;
         Ok(project)
     }
@@ -71,19 +63,17 @@ impl TestProject {
         let current_crate_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let relative_crate_path = get_relative_path(&self.path, &current_crate_path);
 
-        // Check if [dependencies] or [dev-dependencies] exists
-        if !cargo_toml.contains(&format!("[{}]", dependencies_type)) {
-            cargo_toml.push_str(&format!("\n[{}]\n", dependencies_type));
-        }
-
-        // Add husky-rs to the suitable section
+        let section = format!("[{}]", dependencies_type);
         let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", relative_crate_path);
-        if let Some(pos) = cargo_toml.find(&format!("[{}]", dependencies_type)) {
+
+        if let Some(pos) = cargo_toml.find(&section) {
             let insert_pos = cargo_toml[pos..]
                 .find('\n')
                 .map(|p| p + pos + 1)
                 .unwrap_or(cargo_toml.len());
             cargo_toml.insert_str(insert_pos, &husky_rs_dep);
+        } else {
+            cargo_toml.push_str(&format!("\n{}\n{}", section, husky_rs_dep));
         }
 
         fs::write(&cargo_toml_path, cargo_toml)?;
@@ -94,7 +84,8 @@ impl TestProject {
         let husky_dir = self.path.join(".husky").join("hooks");
         fs::create_dir_all(&husky_dir)?;
         for hook in &["pre-commit", "commit-msg", "pre-push"] {
-            create_hook(&husky_dir, hook, content)?;
+            let path = husky_dir.join(hook);
+            fs::write(&path, content)?;
         }
         Ok(())
     }
@@ -111,10 +102,15 @@ impl TestProject {
         let git_hooks_dir = self.path.join(".git").join("hooks");
         for hook in &["pre-commit", "commit-msg", "pre-push"] {
             let hook_path = git_hooks_dir.join(hook);
-            if expect_hooks {
-                assert!(hook_path.exists(), "Hook {} was not created", hook);
+            let hook_exists = hook_path.exists();
+            let hook_content = if hook_exists {
+                fs::read_to_string(&hook_path)?
+            } else {
+                String::new()
+            };
 
-                let hook_content = fs::read_to_string(&hook_path)?;
+            if expect_hooks {
+                assert!(hook_exists, "Hook {} was not created", hook);
                 assert!(
                     hook_content.contains("This hook was set by husky-rs"),
                     "Hook {} does not contain husky-rs header",
@@ -126,8 +122,11 @@ impl TestProject {
                     hook
                 );
             } else {
-                assert!(!hook_path.exists() || !fs::read_to_string(&hook_path)?.contains("This hook was set by husky-rs"),
-                        "Hook {} was unexpectedly created or contains husky-rs content", hook);
+                assert!(
+                    !hook_exists || !hook_content.contains("This hook was set by husky-rs"),
+                    "Hook {} was unexpectedly created or contains husky-rs content",
+                    hook
+                );
             }
         }
         Ok(())
@@ -146,8 +145,7 @@ fn test_husky_rs_with_dependencies() -> Result<(), Error> {
     project.add_husky_rs_to_toml("dependencies")?;
     project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
     project.run_cargo_command("build")?;
-    project.verify_hooks(true)?;
-    Ok(())
+    project.verify_hooks(true)
 }
 
 #[test]
@@ -156,8 +154,7 @@ fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
     project.add_husky_rs_to_toml("dev-dependencies")?;
     project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
     project.run_cargo_command("test")?;
-    project.verify_hooks(true)?;
-    Ok(())
+    project.verify_hooks(true)
 }
 
 #[test]
@@ -166,10 +163,7 @@ fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
     project.add_husky_rs_to_toml("dev-dependencies")?;
     project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
     project.run_cargo_command("build")?;
-
-    // using dev-dependencies, cargo build should not create hooks; only cargo test should
-    project.verify_hooks(false)?;
-    Ok(())
+    project.verify_hooks(false)
 }
 
 #[test]
@@ -180,6 +174,5 @@ fn test_husky_rs_after_cargo_clean() -> Result<(), Error> {
     project.run_cargo_command("build")?;
     project.run_cargo_command("clean")?;
     project.run_cargo_command("build")?;
-    project.verify_hooks(true)?;
-    Ok(())
+    project.verify_hooks(true)
 }
