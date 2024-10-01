@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// Creates a temporary directory with a given prefix, using the current time to ensure uniqueness
 fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let temp_dir = env::temp_dir().join(format!("{}{}", prefix, time_since_epoch.as_secs()));
@@ -12,13 +13,16 @@ fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     Ok(temp_dir)
 }
 
+// Returns the relative path from one directory to another
 fn get_relative_path(from: &Path, to: &Path) -> PathBuf {
     let from_abs = fs::canonicalize(from).unwrap();
     let to_abs = fs::canonicalize(to).unwrap();
 
+    // Break down path into components
     let from_components: Vec<_> = from_abs.components().collect();
     let to_components: Vec<_> = to_abs.components().collect();
 
+    // Find common prefix between both paths
     let common_prefix = from_components
         .iter()
         .zip(to_components.iter())
@@ -36,11 +40,13 @@ fn get_relative_path(from: &Path, to: &Path) -> PathBuf {
     result
 }
 
+// Struct representing a test project with a path
 struct TestProject {
     path: PathBuf,
 }
 
 impl TestProject {
+    // Creates a new test project in a temporary directory
     fn new(prefix: &str) -> Result<Self, Error> {
         let project = TestProject {
             path: create_temp_dir(prefix)?,
@@ -49,6 +55,7 @@ impl TestProject {
         Ok(project)
     }
 
+    // Initializes a new cargo project in the test directory
     fn init(&self) -> Result<(), Error> {
         Command::new("cargo")
             .args(["init", "--bin"])
@@ -57,6 +64,7 @@ impl TestProject {
         Ok(())
     }
 
+    // Adds husky-rs to the Cargo.toml file, depending on whether it is a regular or dev dependency
     fn add_husky_rs_to_toml(&self, dependencies_type: &str) -> Result<(), Error> {
         let cargo_toml_path = self.path.join("Cargo.toml");
         let mut cargo_toml = fs::read_to_string(&cargo_toml_path)?;
@@ -66,6 +74,7 @@ impl TestProject {
         let section = format!("[{}]", dependencies_type);
         let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", relative_crate_path);
 
+        // Insert husky-rs into the correct section of Cargo.toml
         if let Some(pos) = cargo_toml.find(&section) {
             let insert_pos = cargo_toml[pos..]
                 .find('\n')
@@ -80,6 +89,7 @@ impl TestProject {
         Ok(())
     }
 
+    // Creates Husky Git hooks with the given content
     fn create_hooks(&self, content: &str) -> Result<(), Error> {
         let husky_dir = self.path.join(".husky").join("hooks");
         fs::create_dir_all(&husky_dir)?;
@@ -90,6 +100,7 @@ impl TestProject {
         Ok(())
     }
 
+    // Runs a cargo command (e.g., build, test, clean) in the project directory
     fn run_cargo_command(&self, command: &str) -> Result<(), Error> {
         Command::new("cargo")
             .arg(command)
@@ -98,6 +109,7 @@ impl TestProject {
         Ok(())
     }
 
+    // Verifies the existence and content of Git hooks
     fn verify_hooks(&self, expect_hooks: bool) -> Result<(), Error> {
         let git_hooks_dir = self.path.join(".git").join("hooks");
         for hook in &["pre-commit", "commit-msg", "pre-push"] {
@@ -133,12 +145,14 @@ impl TestProject {
     }
 }
 
+// Clean up the test project directory when the object is dropped
 impl Drop for TestProject {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
 
+// Test: Verify husky-rs works as a regular dependency
 #[test]
 fn test_husky_rs_with_dependencies() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dep-test-")?;
@@ -148,6 +162,7 @@ fn test_husky_rs_with_dependencies() -> Result<(), Error> {
     project.verify_hooks(true)
 }
 
+// Test: Verify husky-rs works as a dev dependency with cargo test
 #[test]
 fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dev-dep-test-")?;
@@ -157,6 +172,7 @@ fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
     project.verify_hooks(true)
 }
 
+// Test: Verify husky-rs works as a dev dependency with cargo build, no hooks expected
 #[test]
 fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dev-dep-build-test-")?;
@@ -166,6 +182,7 @@ fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
     project.verify_hooks(false)
 }
 
+// Test: Verify husky-rs works correctly after a cargo clean
 #[test]
 fn test_husky_rs_after_cargo_clean() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-clean-test-")?;
