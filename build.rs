@@ -54,7 +54,7 @@ const SHEBANGS: [&str; 8] = [
     "#!/usr/bin/env python3",
     "#!/usr/bin/env ruby",
     "#!/usr/bin/env node",
-    "#!/usr/bin/env perl"
+    "#!/usr/bin/env perl",
 ];
 
 fn main() -> Result<()> {
