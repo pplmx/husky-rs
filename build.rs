@@ -58,8 +58,8 @@ const SHEBANGS: [&str; 8] = [
 ];
 
 fn main() -> Result<()> {
-    if env::var_os("CARGO_HUSKY_DONT_INSTALL_HOOKS").is_some() {
-        println!("CARGO_HUSKY_DONT_INSTALL_HOOKS is set, skipping hook installation");
+    if env::var_os("NO_HUSKY_HOOKS").is_some() {
+        println!("NO_HUSKY_HOOKS is set, skipping hook installation");
         return Ok(());
     }
 

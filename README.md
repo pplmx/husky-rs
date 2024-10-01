@@ -66,7 +66,7 @@ For a full list, see the [Git documentation](https://git-scm.com/docs/githooks).
 To skip hook installation:
 
 ```sh
-CARGO_HUSKY_DONT_INSTALL_HOOKS=1 cargo build
+NO_HUSKY_HOOKS=1 cargo build
 ```
 
 ## Best Practices
