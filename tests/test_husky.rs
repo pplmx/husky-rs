@@ -107,23 +107,28 @@ impl TestProject {
         Ok(())
     }
 
-    fn verify_hooks(&self) -> Result<(), Error> {
+    fn verify_hooks(&self, expect_hooks: bool) -> Result<(), Error> {
         let git_hooks_dir = self.path.join(".git").join("hooks");
         for hook in &["pre-commit", "commit-msg", "pre-push"] {
             let hook_path = git_hooks_dir.join(hook);
-            assert!(hook_path.exists(), "Hook {} was not created", hook);
+            if expect_hooks {
+                assert!(hook_path.exists(), "Hook {} was not created", hook);
 
-            let hook_content = fs::read_to_string(&hook_path)?;
-            assert!(
-                hook_content.contains("This hook was set by husky-rs"),
-                "Hook {} does not contain husky-rs header",
-                hook
-            );
-            assert!(
-                hook_content.contains("This is a test hook"),
-                "Hook {} does not contain original content",
-                hook
-            );
+                let hook_content = fs::read_to_string(&hook_path)?;
+                assert!(
+                    hook_content.contains("This hook was set by husky-rs"),
+                    "Hook {} does not contain husky-rs header",
+                    hook
+                );
+                assert!(
+                    hook_content.contains("This is a test hook"),
+                    "Hook {} does not contain original content",
+                    hook
+                );
+            } else {
+                assert!(!hook_path.exists() || !fs::read_to_string(&hook_path)?.contains("This hook was set by husky-rs"),
+                        "Hook {} was unexpectedly created or contains husky-rs content", hook);
+            }
         }
         Ok(())
     }
@@ -141,17 +146,29 @@ fn test_husky_rs_with_dependencies() -> Result<(), Error> {
     project.add_husky_rs_to_toml("dependencies")?;
     project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
     project.run_cargo_command("build")?;
-    project.verify_hooks()?;
+    project.verify_hooks(true)?;
     Ok(())
 }
 
 #[test]
-fn test_husky_rs_with_dev_dependencies() -> Result<(), Error> {
+fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dev-dep-test-")?;
     project.add_husky_rs_to_toml("dev-dependencies")?;
     project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
     project.run_cargo_command("test")?;
-    project.verify_hooks()?;
+    project.verify_hooks(true)?;
+    Ok(())
+}
+
+#[test]
+fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-dev-dep-build-test-")?;
+    project.add_husky_rs_to_toml("dev-dependencies")?;
+    project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
+    project.run_cargo_command("build")?;
+
+    // using dev-dependencies, cargo build should not create hooks; only cargo test should
+    project.verify_hooks(false)?;
     Ok(())
 }
 
@@ -163,6 +180,6 @@ fn test_husky_rs_after_cargo_clean() -> Result<(), Error> {
     project.run_cargo_command("build")?;
     project.run_cargo_command("clean")?;
     project.run_cargo_command("build")?;
-    project.verify_hooks()?;
+    project.verify_hooks(true)?;
     Ok(())
 }
