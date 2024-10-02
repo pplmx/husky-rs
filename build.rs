@@ -28,6 +28,8 @@ impl std::fmt::Display for HuskyError {
     }
 }
 
+impl std::error::Error for HuskyError {}
+
 impl From<io::Error> for HuskyError {
     fn from(err: io::Error) -> Self {
         HuskyError::Io(err)
@@ -128,14 +130,11 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
 
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
-        && VALID_HOOK_NAMES
-            .iter()
-            .any(|&name| entry.file_name() == name)
+        && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
 }
 
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
     let dst = dst_dir.join(src.file_name().unwrap());
-
     let content = read_file_lines(src)?;
     if content.is_empty() {
         return Err(HuskyError::EmptyUserHook(src.to_owned()));
