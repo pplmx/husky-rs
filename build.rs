@@ -150,7 +150,7 @@ fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
 
 fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
     let content = fs::read_to_string(git_file)?;
-    let git_dir = PathBuf::from(content.trim_end_matches(&['\n', '\r']));
+    let git_dir = PathBuf::from(content.trim_end_matches(['\n', '\r']));
     if !git_dir.is_dir() {
         return Err(HuskyError::GitDirNotFound(git_dir.display().to_string()));
     }
