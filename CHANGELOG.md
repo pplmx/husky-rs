@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2](https://github.com/pplmx/husky-rs/compare/v0.1.1..v0.1.2) - 2024-11-21
+
+### 🚀 Features
+
+- Impl Error for HuskyError - ([171c357](https://github.com/pplmx/husky-rs/commit/171c3573ecbe83325f1848d9ed0bd272496ac285))
+- Use NO_HUSKY_HOOKS as environment - ([f956189](https://github.com/pplmx/husky-rs/commit/f9561890ea2daa8753e97cea02b3fbd9ed2412a0))
+- Support more shebang - ([f51cd20](https://github.com/pplmx/husky-rs/commit/f51cd2035adaecf234fe7e8928995dfc45bf2a61))
+
+### 🐛 Bug Fixes
+
+- Prepare-commit-msg does not work - ([d82eccd](https://github.com/pplmx/husky-rs/commit/d82eccd272fb102865a732d406394cfc8921c3df))
+
+### 📚 Documentation
+
+- Update the README - ([ca2c436](https://github.com/pplmx/husky-rs/commit/ca2c436f3b96c42f5cafb077c49e0b187baa3040))
+- Add some comments - ([ecf5662](https://github.com/pplmx/husky-rs/commit/ecf566255ae176e55474195d5dc00b266e2e9e0a))
+
+### 🎨 Styling
+
+- Clippy - ([22c4b5f](https://github.com/pplmx/husky-rs/commit/22c4b5f83a92ff9798afd78da0fde7b8911d0ef1))
+- Lint - ([f678ff8](https://github.com/pplmx/husky-rs/commit/f678ff86ac5ddd6413dac963ec0350c5fb0496b5))
+- Lint - ([91a2bf5](https://github.com/pplmx/husky-rs/commit/91a2bf5e07940220c454333f4db6568756eda802))
+
+### 🧪 Testing
+
+- Optimize the code - ([26a2d13](https://github.com/pplmx/husky-rs/commit/26a2d1379b5bc212c0ac1df857d2ab3e4d883222))
+- Add more cases - ([3813250](https://github.com/pplmx/husky-rs/commit/38132508bfd8b9d51659fabf1d444f9aec9cab6f))
+- Add more cases - ([3288ee9](https://github.com/pplmx/husky-rs/commit/3288ee995cdaea16f9c067f9c5eb30768ef5425a))
+
+### ⚙️ Miscellaneous Tasks
+
+- Update the pre-commit - ([29737ce](https://github.com/pplmx/husky-rs/commit/29737ce68bfd826494c6add2a42169893a7b0cfb))
+
+### Build
+
+- Add author info - ([93d6f74](https://github.com/pplmx/husky-rs/commit/93d6f74c7eb9026ec6660f58174ae81aab4b49e8))
+
+
 ## [0.1.1](https://github.com/pplmx/husky-rs/compare/v0.1.0..v0.1.1) - 2024-09-30
 
 ### 🐛 Bug Fixes
@@ -28,9 +66,6 @@ All notable changes to this project will be documented in this file.
 
 - Split lint and test jobs across platforms - ([f6f69be](https://github.com/pplmx/husky-rs/commit/f6f69be36e0d65d18235a894c40effc5860cfa5d))
 
-## New Contributors ❤️
-
-* @github-actions[bot] made their first contribution
 
 ## [0.1.0] - 2024-09-30
 
