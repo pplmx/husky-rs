@@ -2,7 +2,7 @@ fail_fast: true
 
 repos:
     -   repo: https://github.com/pre-commit/pre-commit-hooks
-        rev: v4.6.0
+        rev: v5.0.0
         hooks:
             -   id: check-merge-conflict
             -   id: check-toml
@@ -11,13 +11,9 @@ repos:
             -   id: mixed-line-ending
                 args: [ --fix=lf ]
             -   id: trailing-whitespace
-    -   repo: https://github.com/crate-ci/typos
-        rev: v1.24.6
-        hooks:
-            -   id: typos
     -   repo: https://github.com/commitizen-tools/commitizen
-        rev: v3.29.0
+        rev: v3.31.0
         hooks:
             -   id: commitizen
             -   id: commitizen-branch
-                stages: [ push ]
+                stages: [ pre-push ]
