@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const HOOK_TYPES: &[&str] = &["pre-commit", "prepare-commit-msg", "commit-msg", "pre-push"];
+const HOOK_TEMPLATE: &str = "#!/bin/sh\necho \"This is a test hook\"\n";
+
 // Creates a temporary directory with a given prefix, using the current time to ensure uniqueness
 fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
@@ -90,12 +93,12 @@ impl TestProject {
     }
 
     // Creates Husky Git hooks with the given content
-    fn create_hooks(&self, content: &str) -> Result<(), Error> {
+    fn create_hooks(&self) -> Result<(), Error> {
         let husky_dir = self.path.join(".husky").join("hooks");
         fs::create_dir_all(&husky_dir)?;
-        for hook in &["pre-commit", "commit-msg", "pre-push"] {
+        for hook in HOOK_TYPES {
             let path = husky_dir.join(hook);
-            fs::write(&path, content)?;
+            fs::write(&path, HOOK_TEMPLATE)?;
         }
         Ok(())
     }
@@ -112,7 +115,7 @@ impl TestProject {
     // Verifies the existence and content of Git hooks
     fn verify_hooks(&self, expect_hooks: bool) -> Result<(), Error> {
         let git_hooks_dir = self.path.join(".git").join("hooks");
-        for hook in &["pre-commit", "commit-msg", "pre-push"] {
+        for hook in HOOK_TYPES {
             let hook_path = git_hooks_dir.join(hook);
             let hook_exists = hook_path.exists();
             let hook_content = if hook_exists {
@@ -157,7 +160,7 @@ impl Drop for TestProject {
 fn test_husky_rs_with_dependencies() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dep-test-")?;
     project.add_husky_rs_to_toml("dependencies")?;
-    project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
+    project.create_hooks()?;
     project.run_cargo_command("build")?;
     project.verify_hooks(true)
 }
@@ -167,7 +170,7 @@ fn test_husky_rs_with_dependencies() -> Result<(), Error> {
 fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dev-dep-test-")?;
     project.add_husky_rs_to_toml("dev-dependencies")?;
-    project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
+    project.create_hooks()?;
     project.run_cargo_command("test")?;
     project.verify_hooks(true)
 }
@@ -177,7 +180,7 @@ fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
 fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-dev-dep-build-test-")?;
     project.add_husky_rs_to_toml("dev-dependencies")?;
-    project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
+    project.create_hooks()?;
     project.run_cargo_command("build")?;
     project.verify_hooks(false)
 }
@@ -187,7 +190,7 @@ fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
 fn test_husky_rs_after_cargo_clean() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-clean-test-")?;
     project.add_husky_rs_to_toml("dependencies")?;
-    project.create_hooks("#!/bin/sh\necho \"This is a test hook\"\n")?;
+    project.create_hooks()?;
     project.run_cargo_command("build")?;
     project.run_cargo_command("clean")?;
     project.run_cargo_command("build")?;

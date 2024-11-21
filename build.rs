@@ -46,7 +46,36 @@ type Result<T> = std::result::Result<T, HuskyError>;
 
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
-const VALID_HOOK_NAMES: [&str; 3] = ["pre-commit", "commit-msg", "pre-push"];
+const VALID_HOOK_NAMES: [&str; 28] = [
+    "applypatch-msg",
+    "pre-applypatch",
+    "post-applypatch",
+    "pre-commit",
+    "pre-merge-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "post-commit",
+    "pre-rebase",
+    "post-checkout",
+    "post-merge",
+    "pre-push",
+    "pre-receive",
+    "update",
+    "proc-receive",
+    "post-receive",
+    "post-update",
+    "reference-transaction",
+    "pre-auto-gc",
+    "post-rewrite",
+    "sendemail-validate",
+    "fsmonitor-watchman",
+    "p4-changelist",
+    "p4-prepare-changelist",
+    "p4-post-changelist",
+    "p4-pre-submit",
+    "post-index-change",
+];
 const HUSKY_HEADER: &str = "This hook was set by husky-rs";
 const SHEBANGS: [&str; 8] = [
     "#!/bin/sh",
