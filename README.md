@@ -20,7 +20,7 @@
 
    ```toml
    [dev-dependencies]
-   husky-rs = "0.1.1"
+   husky-rs = "0.1.2"
    ```
 
 2. Create hooks directory:
@@ -51,7 +51,7 @@
 
 ### Supported Git Hooks
 
-`husky-rs` supports all Git hooks, including:
+`husky-rs` aims to support a wide range of Git hooks, including:
 
 - `pre-commit`
 - `prepare-commit-msg`
@@ -59,7 +59,9 @@
 - `post-commit`
 - `pre-push`
 
-For a full list, see the [Git documentation](https://git-scm.com/docs/githooks).
+For a complete list of supported hooks, refer to the [Git documentation](https://git-scm.com/docs/githooks).
+
+If you encounter any unsupported hooks, please don't hesitate to [open an issue](https://github.com/pplmx/husky-rs/issues).
 
 ### Configuration
 
