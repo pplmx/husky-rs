@@ -16,11 +16,20 @@
 
 ## Quick Start
 
-1. Add to your `Cargo.toml`:
+1. Adding `husky-rs` to your project:
 
-   ```toml
-   [dev-dependencies]
-   husky-rs = "0.1.2"
+   You have several options:
+
+   ```sh
+   # Option 1: Add as a Regular Dependency
+   cargo add husky-rs
+
+   # Option 2: Add as a Dev Dependency
+   cargo add --dev husky-rs
+
+   # Option 3: Use the Main Branch
+   cargo add --git https://github.com/pplmx/husky-rs --branch main
+   cargo add --dev --git https://github.com/pplmx/husky-rs --branch main
    ```
 
 2. Create hooks directory:
