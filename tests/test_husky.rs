@@ -5,7 +5,13 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const HOOK_TYPES: &[&str] = &["pre-commit", "prepare-commit-msg", "commit-msg", "pre-push"];
+const HOOK_TYPES: &[&str] = &[
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "pre-push",
+];
 const HOOK_TEMPLATE: &str = "#!/bin/sh\necho \"This is a test hook\"\n";
 
 // Creates a temporary directory with a given prefix, using the current time to ensure uniqueness
@@ -163,6 +169,49 @@ fn test_husky_rs_with_dependencies() -> Result<(), Error> {
     project.create_hooks()?;
     project.run_cargo_command("build")?;
     project.verify_hooks(true)
+}
+
+// Test: Verify that empty or whitespace-only user hook scripts are not installed
+#[test]
+fn test_empty_user_hook_script() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-empty-hook-")?;
+    project.add_husky_rs_to_toml("dependencies")?;
+
+    let husky_hooks_dir = project.path.join(".husky").join("hooks");
+    fs::create_dir_all(&husky_hooks_dir)?;
+
+    // Create an empty pre-commit hook
+    fs::write(husky_hooks_dir.join("pre-commit"), "")?;
+
+    // Create a pre-push hook with only whitespace
+    fs::write(husky_hooks_dir.join("pre-push"), "   \n   \t  ")?;
+
+    project.run_cargo_command("build")?;
+
+    let git_hooks_dir = project.path.join(".git").join("hooks");
+    assert!(
+        !git_hooks_dir.join("pre-commit").exists(),
+        "Empty pre-commit hook script should not have been installed"
+    );
+    assert!(
+        !git_hooks_dir.join("pre-push").exists(),
+        "Whitespace-only pre-push hook script should not have been installed"
+    );
+
+    Ok(())
+}
+
+// Test: Verify no hooks are installed if NO_HUSKY_HOOKS is set
+#[test]
+fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
+    env::set_var("NO_HUSKY_HOOKS", "1");
+    let project = TestProject::new("husky-rs-no-hooks-env-var-")?;
+    project.add_husky_rs_to_toml("dependencies")?;
+    project.create_hooks()?;
+    project.run_cargo_command("build")?;
+    let result = project.verify_hooks(false);
+    env::remove_var("NO_HUSKY_HOOKS");
+    result
 }
 
 // Test: Verify husky-rs works as a dev dependency with cargo test

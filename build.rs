@@ -46,7 +46,7 @@ type Result<T> = std::result::Result<T, HuskyError>;
 
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
-const VALID_HOOK_NAMES: [&str; 28] = [
+const VALID_HOOK_NAMES: [&str; 27] = [
     "applypatch-msg",
     "pre-applypatch",
     "post-applypatch",
@@ -54,7 +54,6 @@ const VALID_HOOK_NAMES: [&str; 28] = [
     "pre-merge-commit",
     "prepare-commit-msg",
     "commit-msg",
-    "post-commit",
     "post-commit",
     "pre-rebase",
     "post-checkout",
@@ -177,24 +176,15 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
-    let mut lines: Vec<String> = reader.lines().collect::<io::Result<_>>()?;
+    // Collect only non-whitespace lines
+    let lines: Vec<String> = reader
+        .lines()
+        .collect::<io::Result<Vec<String>>>()?
+        .into_iter()
+        .filter(|line| !line.trim().is_empty()) // Keep only lines with non-whitespace content
+        .collect();
 
-    // Remove leading empty lines
-    while lines.first().map_or(false, |line| line.trim().is_empty()) {
-        lines.remove(0);
-    }
-
-    // Remove trailing empty lines
-    while lines.last().map_or(false, |line| line.trim().is_empty()) {
-        lines.pop();
-    }
-
-    // Ensure the last line is empty if no other lines exist
-    if lines.is_empty() || !lines.last().map_or(false, |line| line.trim().is_empty()) {
-        lines.push(String::new());
-    }
-
-    Ok(lines)
+    Ok(lines) // Return the filtered lines. If all lines were whitespace/empty, this will be an empty Vec.
 }
 
 fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
