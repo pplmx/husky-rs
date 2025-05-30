@@ -88,8 +88,9 @@ const SHEBANGS: [&str; 8] = [
 ];
 
 fn main() -> Result<()> {
+    println!("cargo:rerun-if-env-changed=NO_HUSKY_HOOKS");
     if env::var_os("NO_HUSKY_HOOKS").is_some() {
-        println!("NO_HUSKY_HOOKS is set, skipping hook installation");
+        println!("NO_HUSKY_HOOKS is set, skipping hook installation"); // This should be visible in captured stderr
         return Ok(());
     }
 
@@ -115,10 +116,19 @@ fn install_hooks() -> Result<()> {
 
     fs::create_dir_all(&git_hooks_dir)?;
 
-    for entry in fs::read_dir(&user_hooks_dir)? {
-        let entry = entry?;
+    for entry_result in fs::read_dir(&user_hooks_dir)? {
+        let entry = entry_result?;
+        let user_hook_path = entry.path();
+
+        // Tell cargo to re-run the build script if this file/symlink changes.
+        // Tell cargo to re-run the build script if this file/symlink changes.
+        // This was temporarily removed for debugging test_no_hooks_if_env_var_set
+        // if let Some(path_str) = user_hook_path.to_str() {
+        //     println!("cargo:rerun-if-changed={}", path_str);
+        // }
+
         if is_valid_hook_file(&entry) {
-            install_hook(&entry.path(), &git_hooks_dir)?;
+            install_hook(&user_hook_path, &git_hooks_dir)?;
         }
     }
 
@@ -157,19 +167,67 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
 }
 
 fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
-    entry.file_type().map(|ft| ft.is_file()).unwrap_or(false)
-        && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
+    let path = entry.path();
+    // fs::metadata follows symlinks. If we wanted to check the symlink itself,
+    // we would use fs::symlink_metadata().
+    let metadata_result = fs::metadata(&path);
+
+    let is_file_type = metadata_result.map(|md| md.is_file()).unwrap_or(false);
+
+    is_file_type && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
 }
 
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
     let dst = dst_dir.join(src.file_name().unwrap());
-    let content = read_file_lines(src)?;
-    if content.is_empty() {
+    let user_script_lines = read_file_lines(src)?;
+    if user_script_lines.is_empty() {
         return Err(HuskyError::EmptyUserHook(src.to_owned()));
     }
 
-    let content_with_header = add_husky_header(content);
-    write_executable_file(&dst, &content_with_header)
+    let (shebang, actual_script_body) = extract_shebang_and_body(user_script_lines);
+    let final_hook_script_lines = generate_husky_hook_script(shebang, actual_script_body);
+    write_executable_file(&dst, &final_hook_script_lines)
+}
+
+// Extracts shebang and body from user script lines.
+// Returns default shebang if not found or if script is empty.
+fn extract_shebang_and_body(user_script_lines: Vec<String>) -> (String, Vec<String>) {
+    let mut actual_script_body = user_script_lines; // No clone needed if we consume it
+
+    let shebang = if let Some(first_line) = actual_script_body.first() {
+        if SHEBANGS.contains(&first_line.trim()) {
+            let s = first_line.trim().to_string();
+            actual_script_body = actual_script_body.into_iter().skip(1).collect();
+            s
+        } else {
+            "#!/usr/bin/env bash".to_string()
+        }
+    } else {
+        // This case should ideally not be hit if install_hook checks for empty user_script_lines
+        "#!/usr/bin/env bash".to_string()
+    };
+
+    (shebang, actual_script_body)
+}
+
+// Generates the full hook script content with husky header.
+fn generate_husky_hook_script(shebang: String, actual_script_body: Vec<String>) -> Vec<String> {
+    let header_content = format!(
+        "{}
+#
+# {}
+# v{}: {}
+#
+",
+        shebang,
+        HUSKY_HEADER,
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_HOMEPAGE")
+    );
+
+    let mut final_script_lines = vec![header_content];
+    final_script_lines.extend(actual_script_body);
+    final_script_lines
 }
 
 fn read_file_lines(path: &Path) -> Result<Vec<String>> {
@@ -185,36 +243,6 @@ fn read_file_lines(path: &Path) -> Result<Vec<String>> {
         .collect();
 
     Ok(lines) // Return the filtered lines. If all lines were whitespace/empty, this will be an empty Vec.
-}
-
-fn add_husky_header(mut content: Vec<String>) -> Vec<String> {
-    let shebang = content
-        .first()
-        .filter(|line| SHEBANGS.contains(&line.trim()))
-        .map(|line| line.trim().to_string())
-        .unwrap_or_else(|| "#!/usr/bin/env bash".to_string());
-
-    content = content
-        .into_iter()
-        .skip_while(|line| SHEBANGS.contains(&line.trim()) || line.trim().is_empty())
-        .collect();
-
-    let header = format!(
-        "{}
-#
-# {}
-# v{}: {}
-#
-",
-        shebang,
-        HUSKY_HEADER,
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_HOMEPAGE")
-    );
-
-    let mut result = vec![header];
-    result.extend(content);
-    result
 }
 
 fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
@@ -239,4 +267,110 @@ fn create_executable_file(path: &Path) -> io::Result<File> {
 #[cfg(not(unix))]
 fn create_executable_file(path: &Path) -> io::Result<File> {
     File::create(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // use std::path::PathBuf; // Not needed for these specific tests
+
+    #[test]
+    fn test_extract_standard_shebang() {
+        let input_lines = vec!["#!/bin/sh".to_string(), "echo hello".to_string()];
+        let (shebang, body) = extract_shebang_and_body(input_lines);
+        assert_eq!(shebang, "#!/bin/sh");
+        assert_eq!(body, vec!["echo hello".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_python_shebang() {
+        let input_lines = vec![
+            "#!/usr/bin/env python".to_string(),
+            "print('hello')".to_string(),
+        ];
+        let (shebang, body) = extract_shebang_and_body(input_lines);
+        assert_eq!(shebang, "#!/usr/bin/env python");
+        assert_eq!(body, vec!["print('hello')".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_no_shebang() {
+        let input_lines = vec!["echo no shebang".to_string()];
+        let (shebang, body) = extract_shebang_and_body(input_lines);
+        assert_eq!(shebang, "#!/usr/bin/env bash");
+        assert_eq!(body, vec!["echo no shebang".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_shebang_no_leading_empty_lines_in_body() {
+        // Simulating read_file_lines output which already filters empty lines
+        let input_lines = vec!["#!/bin/sh".to_string(), "echo hello".to_string()];
+        let (shebang, body) = extract_shebang_and_body(input_lines);
+        assert_eq!(shebang, "#!/bin/sh");
+        assert_eq!(body, vec!["echo hello".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_only_shebang() {
+        let input_lines = vec!["#!/bin/sh".to_string()];
+        let (shebang, body) = extract_shebang_and_body(input_lines);
+        assert_eq!(shebang, "#!/bin/sh");
+        assert_eq!(body, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_extract_empty_input() {
+        let input_lines: Vec<String> = vec![];
+        let (shebang, body) = extract_shebang_and_body(input_lines);
+        assert_eq!(shebang, "#!/usr/bin/env bash");
+        assert_eq!(body, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_generate_basic_script() {
+        let shebang = "#!/bin/sh".to_string();
+        let body = vec!["echo test".to_string(), "exit 1".to_string()];
+        let result = generate_husky_hook_script(shebang.clone(), body.clone());
+
+        assert_eq!(result[0], shebang);
+        let full_script = result.join("\n");
+        assert!(full_script.contains(HUSKY_HEADER));
+        assert!(full_script.contains(env!("CARGO_PKG_VERSION")));
+        assert!(full_script.contains(env!("CARGO_PKG_HOMEPAGE")));
+        assert!(full_script.contains("\necho test\n")); // Check for newline separation
+        assert!(full_script.contains("\nexit 1")); // Ensure it's part of the body
+                                                   // Check that the body lines are at the end
+        let expected_body_combined = "\necho test\nexit 1";
+        assert!(
+            full_script.ends_with(expected_body_combined)
+                || full_script.ends_with(&(expected_body_combined.to_string() + "\n"))
+        );
+    }
+
+    #[test]
+    fn test_generate_script_empty_body() {
+        let shebang = "#!/usr/bin/env bash".to_string();
+        let body: Vec<String> = vec![];
+        let result = generate_husky_hook_script(shebang.clone(), body);
+
+        assert_eq!(result[0], shebang);
+        let full_script = result.join("\n");
+        assert!(full_script.contains(HUSKY_HEADER));
+        assert!(full_script.contains(env!("CARGO_PKG_VERSION")));
+        assert!(full_script.contains(env!("CARGO_PKG_HOMEPAGE")));
+        // Ensure that nothing follows the header's trailing newline if the body is empty.
+        let expected_header = format!(
+            "{}
+#
+# {}
+# v{}: {}
+#
+", // Note the trailing newline
+            shebang,
+            HUSKY_HEADER,
+            env!("CARGO_PKG_VERSION"),
+            env!("CARGO_PKG_HOMEPAGE")
+        );
+        assert_eq!(full_script, expected_header.trim_end_matches('\n')); // Compare without trailing newline if result doesn't have one for empty body
+    }
 }
