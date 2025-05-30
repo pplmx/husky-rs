@@ -524,14 +524,48 @@ fn test_symbolic_link_hook() -> Result<(), Error> {
 // Test: Verify no hooks are installed if NO_HUSKY_HOOKS is set
 #[test]
 fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
-    env::set_var("NO_HUSKY_HOOKS", "1");
+    std::env::set_var("NO_HUSKY_HOOKS", "1"); // Set for current process (less critical but good for belt-and-suspenders)
+    println!("[TEST NO_HOOKS_ENV_VAR] Set NO_HUSKY_HOOKS=1 for current process.");
+
     let project = TestProject::new("husky-rs-no-hooks-env-var-")?;
+    println!(
+        "[TEST NO_HOOKS_ENV_VAR] TestProject path: {}",
+        project.path.display()
+    );
     project.add_husky_rs_to_toml("dependencies")?;
-    project.create_hooks()?;
-    project.run_cargo_command("build")?;
-    let result = project.verify_hooks(false);
-    env::remove_var("NO_HUSKY_HOOKS");
-    result
+    project.create_hooks()?; // Creates dummy hooks in .husky/hooks/
+    println!("[TEST NO_HOOKS_ENV_VAR] Created dummy hooks in .husky/hooks/");
+
+    println!("[TEST NO_HOOKS_ENV_VAR] Running cargo build with NO_HUSKY_HOOKS=1 explicitly set for the command...");
+    let build_output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("NO_HUSKY_HOOKS", "1") // Explicitly set for this command
+        .output()?;
+
+    println!(
+        "[TEST NO_HOOKS_ENV_VAR] cargo build STDOUT:\n{}",
+        String::from_utf8_lossy(&build_output.stdout)
+    );
+    println!(
+        "[TEST NO_HOOKS_ENV_VAR] cargo build STDERR:\n{}",
+        String::from_utf8_lossy(&build_output.stderr)
+    );
+
+    assert!(
+        build_output.status.success(),
+        "[TEST NO_HOOKS_ENV_VAR] Cargo build should succeed even with NO_HUSKY_HOOKS set. Stderr: {}",
+        String::from_utf8_lossy(&build_output.stderr)
+    );
+    println!("[TEST NO_HOOKS_ENV_VAR] Cargo build command reported success.");
+
+    // Key verification: husky-rs build script should have seen NO_HUSKY_HOOKS and skipped installation
+    let verify_result = project.verify_hooks(false);
+
+    std::env::remove_var("NO_HUSKY_HOOKS"); // Clean up env var for current process
+    println!("[TEST NO_HOOKS_ENV_VAR] Removed NO_HUSKY_HOOKS from current process environment.");
+
+    verify_result
 }
 
 // Test: Verify husky-rs works as a dev dependency with cargo test
