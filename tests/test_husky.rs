@@ -118,8 +118,8 @@ impl TestProject {
         if status.success() {
             Ok(())
         } else {
-            Err(Error::new(
-                std::io::ErrorKind::Other,
+            Err(Error::other(
+                // Changed here
                 format!(
                     "Cargo command `cargo {}` failed with status: {}",
                     command, status
@@ -225,8 +225,7 @@ fn test_shebang_variations() -> Result<(), Error> {
 
     println!("[TEST] Listing files in .husky/hooks before build:");
     if husky_hooks_dir.exists() {
-        for entry in fs::read_dir(&husky_hooks_dir)? {
-            let entry = entry?;
+        for entry in fs::read_dir(&husky_hooks_dir)?.flatten() {
             println!("[TEST]   - {}", entry.path().display());
         }
     } else {
@@ -267,8 +266,7 @@ fn test_shebang_variations() -> Result<(), Error> {
     // List files in .git/hooks
     if git_hooks_dir.exists() {
         println!("[TEST] Listing files in .git/hooks after build:");
-        for entry in fs::read_dir(&git_hooks_dir)? {
-            let entry = entry?;
+        for entry in fs::read_dir(&git_hooks_dir)?.flatten() {
             println!("[TEST]   - {}", entry.path().display());
         }
     } else {
@@ -466,8 +464,8 @@ fn test_symbolic_link_hook() -> Result<(), Error> {
         if !build_success {
             // It's important to list files even if build fails, to see the state
             // list_files_in_git_hooks(&project.path.join(".git").join("hooks"));
-            return Err(Error::new(
-                std::io::ErrorKind::Other,
+            return Err(Error::other(
+                // Changed here
                 format!(
                     "Cargo build failed for symlink test. Stderr: {}",
                     build_stderr
@@ -487,10 +485,8 @@ fn test_symbolic_link_hook() -> Result<(), Error> {
         let git_hooks_dir_for_listing = project.path.join(".git").join("hooks");
         if git_hooks_dir_for_listing.exists() {
             println!("[TEST_SYMLINK] Listing files in .git/hooks after build:");
-            for entry_res in fs::read_dir(&git_hooks_dir_for_listing)? {
-                if let Ok(entry) = entry_res {
-                    println!("[TEST_SYMLINK]   - {}", entry.path().display());
-                }
+            for entry in fs::read_dir(&git_hooks_dir_for_listing)?.flatten() {
+                println!("[TEST_SYMLINK]   - {}", entry.path().display());
             }
         } else {
             println!("[TEST_SYMLINK] .git/hooks directory does NOT exist after build!");
