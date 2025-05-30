@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4](https://github.com/pplmx/husky-rs/compare/v0.1.3..v0.1.4) - 2025-05-30
+
+### 🚀 Features
+
+- Refactor build script, enhance test coverage and fix symlink handling - ([3268b99](https://github.com/pplmx/husky-rs/commit/3268b996679160574dbfe1ff7406c4f4c9becffb))
+- Enhance test coverage and cleanup build script - ([c055073](https://github.com/pplmx/husky-rs/commit/c0550735c5ad0c92641aed0902d9b71834289f4b))
+
+### 🐛 Bug Fixes
+
+- Ensure NO_HUSKY_HOOKS respected in test environment - ([c7bdbb4](https://github.com/pplmx/husky-rs/commit/c7bdbb496addd316141e06f7147b7dda7cf32fbe))
+- Address clippy lints in test suite - ([cba70f1](https://github.com/pplmx/husky-rs/commit/cba70f14bba1dd3073ef6f81e14bc57355b12de1))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Bump version to 0.1.4 - ([436cf97](https://github.com/pplmx/husky-rs/commit/436cf976066936233f798dfc6342dedc6b38a431))
+
+## New Contributors ❤️
+
+* @google-labs-jules[bot] made their first contribution in [#4](https://github.com/pplmx/husky-rs/pull/4)
+
 ## [0.1.3](https://github.com/pplmx/husky-rs/compare/v0.1.2..v0.1.3) - 2024-12-17
 
 ### 📚 Documentation
