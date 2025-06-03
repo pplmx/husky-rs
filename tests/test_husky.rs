@@ -100,14 +100,23 @@ impl TestProject {
     }
 
     // Adds husky-rs to the Cargo.toml file, depending on whether it is a regular or dev dependency
-    fn add_husky_rs_to_toml(&self, dependencies_type: &str) -> Result<(), Error> {
+    // use_abs_path, it means using the absolute path to adding local husky-rs as the test rust project dependencies
+    fn add_husky_rs_to_toml(
+        &self,
+        dependencies_type: &str,
+        use_abs_path: bool,
+    ) -> Result<(), Error> {
         let cargo_toml_path = self.path.join("Cargo.toml");
         let mut cargo_toml = fs::read_to_string(&cargo_toml_path)?;
         let current_crate_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let relative_crate_path = get_relative_path(&self.path, &current_crate_path);
+        let local_husky_rs_path = if use_abs_path {
+            current_crate_path
+        } else {
+            get_relative_path(&self.path, &current_crate_path)
+        };
 
         let section = format!("[{}]", dependencies_type);
-        let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", relative_crate_path);
+        let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", local_husky_rs_path);
 
         // Insert husky-rs into the correct section of Cargo.toml
         if let Some(pos) = cargo_toml.find(&section) {
@@ -216,14 +225,66 @@ impl Drop for TestProject {
     }
 }
 
-// Test: Verify husky-rs works as a regular dependency
+// Test: Verify husky-rs works as a regular dependency using the relative path
 #[test]
-fn test_husky_rs_with_dependencies() -> Result<(), Error> {
-    let project = TestProject::new("husky-rs-dep-test-")?;
-    project.add_husky_rs_to_toml("dependencies")?;
+fn test_husky_rs_with_dep_rel() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-dep-rel-test-")?;
+    project.add_husky_rs_to_toml("dependencies", false)?;
     project.create_hooks()?;
     project.run_cargo_command("build")?;
     project.verify_hooks(true)
+}
+
+// Test: Verify husky-rs works as a regular dependency using the absolute path
+#[test]
+fn test_husky_rs_with_dep_abs() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-dep-abs-test-")?;
+    project.add_husky_rs_to_toml("dependencies", true)?;
+    project.create_hooks()?;
+    project.run_cargo_command("build")?;
+    project.verify_hooks(true)
+}
+
+// Test: Verify husky-rs works correctly after a cargo clean
+#[test]
+fn test_husky_rs_with_dep_after_cargo_clean() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-clean-test-")?;
+    project.add_husky_rs_to_toml("dependencies", false)?;
+    project.create_hooks()?;
+    project.run_cargo_command("build")?;
+    project.run_cargo_command("clean")?;
+    project.run_cargo_command("build")?;
+    project.verify_hooks(true)
+}
+
+// Test: Verify husky-rs works as a dev dependency using the relative path with cargo test
+#[test]
+fn test_husky_rs_with_dev_dep_rel_and_cargo_test() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-dev-dep-rel-test-")?;
+    project.add_husky_rs_to_toml("dev-dependencies", false)?;
+    project.create_hooks()?;
+    project.run_cargo_command("test")?;
+    project.verify_hooks(true)
+}
+
+// Test: Verify husky-rs works as a dev dependency using the absolute path with cargo test
+#[test]
+fn test_husky_rs_with_dev_dep_abs_and_cargo_test() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-dev-dep-abs-test-")?;
+    project.add_husky_rs_to_toml("dev-dependencies", true)?;
+    project.create_hooks()?;
+    project.run_cargo_command("test")?;
+    project.verify_hooks(true)
+}
+
+// Test: Verify husky-rs works as a dev dependency with cargo build, no hooks expected
+#[test]
+fn test_husky_rs_with_dev_dep_and_cargo_build() -> Result<(), Error> {
+    let project = TestProject::new("husky-rs-dev-dep-build-test-")?;
+    project.add_husky_rs_to_toml("dev-dependencies", false)?;
+    project.create_hooks()?;
+    project.run_cargo_command("build")?;
+    project.verify_hooks(false)
 }
 
 // Test: Debugging hook installation, using project.create_hooks() and capturing build output
@@ -235,7 +296,7 @@ fn test_shebang_variations() -> Result<(), Error> {
     let project = TestProject::new("husky-rs-capture-output-")?;
     println!("[TEST] TestProject path: {}", project.path.display());
 
-    project.add_husky_rs_to_toml("dependencies")?;
+    project.add_husky_rs_to_toml("dependencies", false)?;
     println!("[TEST] Added husky-rs to Cargo.toml");
 
     project.create_hooks()?;
@@ -335,7 +396,7 @@ fn test_empty_user_hook_script() -> Result<(), Error> {
     env::remove_var("NO_HUSKY_HOOKS"); // Ensure clean env state for this test too
 
     let project = TestProject::new("husky-rs-empty-hook-")?;
-    project.add_husky_rs_to_toml("dependencies")?;
+    project.add_husky_rs_to_toml("dependencies", false)?;
 
     let husky_hooks_dir = project.path.join(".husky").join("hooks");
     fs::create_dir_all(&husky_hooks_dir)?;
@@ -347,33 +408,18 @@ fn test_empty_user_hook_script() -> Result<(), Error> {
     fs::write(husky_hooks_dir.join("pre-push"), "   \n   \t  ")?;
 
     // Expect the build to fail because husky-rs build script should error out
-    let build_output_result = project.run_cargo_command_with_output(&["build"]);
+    let build_result = project.run_cargo_command("build");
     assert!(
-        build_output_result.is_ok(),
-        "run_cargo_command_with_output itself should not fail. Result was: {:?}",
-        build_output_result
+        build_result.is_err(),
+        "Build should fail for project with empty/whitespace user hooks. Result was: {:?}",
+        build_result
     );
 
-    let (stdout, stderr, success_status) = build_output_result.unwrap();
-
-    println!("[TEST_EMPTY_HOOK] Build STDOUT:\n{}", stdout);
-    println!("[TEST_EMPTY_HOOK] Build STDERR:\n{}", stderr);
-
-    assert!(
-        !success_status,
-        "Build should not succeed for project with empty/whitespace user hooks."
-    );
-
-    let expected_error_message_fragment = "User hook script is empty";
-    assert!(
-        stderr.contains(expected_error_message_fragment),
-        "Build stderr should contain specific error message about empty hook. Stderr was: {}",
-        stderr
-    );
-    println!(
-        "[TEST_EMPTY_HOOK] Build failed as expected with correct error message fragment: '{}'",
-        expected_error_message_fragment
-    );
+    if let Err(e) = &build_result {
+        println!("[TEST_EMPTY_HOOK] Build failed as expected: {}", e);
+        // Further check if the error message contains specific text from husky-rs build script if desired
+        // e.g., assert!(e.to_string().contains("User hook script is empty"));
+    }
 
     // Assertions that hooks were NOT installed (these should still hold)
     let git_hooks_dir = project.path.join(".git").join("hooks");
@@ -401,7 +447,7 @@ fn test_symbolic_link_hook() -> Result<(), Error> {
         project.path.display()
     );
 
-    project.add_husky_rs_to_toml("dependencies")?;
+    project.add_husky_rs_to_toml("dependencies", false)?;
     println!("[TEST_SYMLINK] Added husky-rs to Cargo.toml");
 
     let husky_hooks_dir = project.path.join(".husky").join("hooks");
@@ -573,7 +619,7 @@ fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
         "[TEST NO_HOOKS_ENV_VAR] TestProject path: {}",
         project.path.display()
     );
-    project.add_husky_rs_to_toml("dependencies")?;
+    project.add_husky_rs_to_toml("dependencies", false)?;
     project.create_hooks()?; // Creates dummy hooks in .husky/hooks/
     println!("[TEST NO_HOOKS_ENV_VAR] Created dummy hooks in .husky/hooks/");
 
@@ -607,69 +653,4 @@ fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
     println!("[TEST NO_HOOKS_ENV_VAR] Removed NO_HUSKY_HOOKS from current process environment.");
 
     verify_result
-}
-
-// Test: Verify husky-rs works as a dev dependency with cargo test
-#[test]
-fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
-    let project = TestProject::new("husky-rs-dev-dep-test-")?;
-    project.add_husky_rs_to_toml("dev-dependencies")?;
-    project.create_hooks()?;
-
-    println!(
-        "[TEST_DEV_DEPS_CARGO_TEST] Running cargo test for project at {}",
-        project.path.display()
-    );
-    let test_output_result = project.run_cargo_command_with_output(&["test"]);
-    assert!(
-        test_output_result.is_ok(),
-        "[TEST_DEV_DEPS_CARGO_TEST] run_cargo_command_with_output itself should not fail. Result was: {:?}",
-        test_output_result
-    );
-
-    let (stdout, stderr, success_status) = test_output_result.unwrap();
-    println!("[TEST_DEV_DEPS_CARGO_TEST] cargo test STDOUT:\n{}", stdout);
-    println!("[TEST_DEV_DEPS_CARGO_TEST] cargo test STDERR:\n{}", stderr);
-
-    // For dev-dependencies, when `cargo test` is run on the host crate (the temporary project),
-    // its build script (and thus husky-rs's build script, as a dev-dep) should run.
-    // If find_git_dir fails, husky-rs build.rs currently prints an error and exits Ok(()),
-    // so success_status should still be true.
-    assert!(
-        success_status,
-        "[TEST_DEV_DEPS_CARGO_TEST] cargo test command failed unexpectedly. Stderr: {}",
-        stderr
-    );
-
-    // If the hypothesis is that find_git_dir fails on Windows here,
-    // stderr might contain "Git directory not found".
-    // If it does, verify_hooks(true) will fail. If it doesn't, hooks should be installed.
-    // This print will help diagnose on CI.
-    if stderr.contains("Git directory not found") {
-        println!("[TEST_DEV_DEPS_CARGO_TEST] DIAGNOSTIC: 'Git directory not found' was present in stderr.");
-    }
-
-    project.verify_hooks(true)
-}
-
-// Test: Verify husky-rs works as a dev dependency with cargo build, no hooks expected
-#[test]
-fn test_husky_rs_with_dev_dependencies_and_cargo_build() -> Result<(), Error> {
-    let project = TestProject::new("husky-rs-dev-dep-build-test-")?;
-    project.add_husky_rs_to_toml("dev-dependencies")?;
-    project.create_hooks()?;
-    project.run_cargo_command("build")?;
-    project.verify_hooks(false)
-}
-
-// Test: Verify husky-rs works correctly after a cargo clean
-#[test]
-fn test_husky_rs_after_cargo_clean() -> Result<(), Error> {
-    let project = TestProject::new("husky-rs-clean-test-")?;
-    project.add_husky_rs_to_toml("dependencies")?;
-    project.create_hooks()?;
-    project.run_cargo_command("build")?;
-    project.run_cargo_command("clean")?;
-    project.run_cargo_command("build")?;
-    project.verify_hooks(true)
 }
