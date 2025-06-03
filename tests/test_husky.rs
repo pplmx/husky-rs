@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::{self};
 use std::io::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,10 +14,36 @@ const HOOK_TYPES: &[&str] = &[
 ];
 const HOOK_TEMPLATE: &str = "#!/bin/sh\necho \"This is a test hook\"\n";
 
-// Creates a temporary directory with a given prefix, using the current time to ensure uniqueness
+// Check if a directory is writable by attempting to create a test file
+fn is_writable(path: &Path) -> bool {
+    let test_file = path.join(".write_test");
+    match fs::File::create(&test_file) {
+        Ok(_) => {
+            let _ = fs::remove_file(&test_file);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+// Create temporary directory, preferring parent directory of current crate, fallback to system temp
 fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-    let temp_dir = env::temp_dir().join(format!("{}{}", prefix, time_since_epoch.as_secs()));
+    let timestamp = time_since_epoch.as_secs();
+
+    // Try parent directory of current crate first
+    let current_crate_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if let Some(parent_path) = current_crate_path.parent() {
+        if is_writable(parent_path) {
+            let temp_dir = parent_path.join(format!("{}{}", prefix, timestamp));
+            if fs::create_dir_all(&temp_dir).is_ok() {
+                return Ok(temp_dir);
+            }
+        }
+    }
+
+    // Fallback to system temp directory
+    let temp_dir = env::temp_dir().join(format!("{}{}", prefix, timestamp));
     fs::create_dir_all(&temp_dir)?;
     Ok(temp_dir)
 }
