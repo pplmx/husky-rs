@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.5](https://github.com/pplmx/husky-rs/compare/v0.1.4..v0.1.5) - 2025-06-03
+
+### 🐛 Bug Fixes
+
+- *(ci)* Resolve cross-drive temp dir issue on Windows runners - ([5d0fa86](https://github.com/pplmx/husky-rs/commit/5d0fa8692a086a3b37707a4d368c76428b6df307))
+- Simplify build script testing - ([3788868](https://github.com/pplmx/husky-rs/commit/378886894ea55e48be405b19585df2103000ac19))
+
+### 🧪 Testing
+
+- Improve test coverage for different dependency types and scenarios - ([5bc771e](https://github.com/pplmx/husky-rs/commit/5bc771e395ac3818d1ba580c5e5cb5e07276a5b9))
+
+### ⚙️ Miscellaneous Tasks
+
+- *(config)* Migrate config .github/renovate.json - ([d31336b](https://github.com/pplmx/husky-rs/commit/d31336b5143b6ecaa797bb06f6d181f996f32401))
+
+## New Contributors ❤️
+
+* @renovate[bot] made their first contribution in [#9](https://github.com/pplmx/husky-rs/pull/9)
+
 ## [0.1.4](https://github.com/pplmx/husky-rs/compare/v0.1.3..v0.1.4) - 2025-05-30
 
 ### 🚀 Features
