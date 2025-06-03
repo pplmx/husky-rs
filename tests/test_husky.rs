@@ -1,7 +1,7 @@
 use std::env;
 use std::fs::{self};
 use std::io::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -20,33 +20,6 @@ fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     let temp_dir = env::temp_dir().join(format!("{}{}", prefix, time_since_epoch.as_secs()));
     fs::create_dir_all(&temp_dir)?;
     Ok(temp_dir)
-}
-
-// Returns the relative path from one directory to another
-fn get_relative_path(from: &Path, to: &Path) -> PathBuf {
-    let from_abs = fs::canonicalize(from).unwrap();
-    let to_abs = fs::canonicalize(to).unwrap();
-
-    // Break down path into components
-    let from_components: Vec<_> = from_abs.components().collect();
-    let to_components: Vec<_> = to_abs.components().collect();
-
-    // Find common prefix between both paths
-    let common_prefix = from_components
-        .iter()
-        .zip(to_components.iter())
-        .take_while(|&(a, b)| a == b)
-        .count();
-
-    let parents = from_components.len() - common_prefix;
-    let mut result = PathBuf::new();
-    for _ in 0..parents {
-        result.push("..");
-    }
-    for component in &to_components[common_prefix..] {
-        result.push(component);
-    }
-    result
 }
 
 // Struct representing a test project with a path
@@ -74,7 +47,10 @@ impl TestProject {
         project.debug_print("=== TestProject Path Information ===");
         project.debug_print(&format!("Temp directory prefix: {}", prefix));
         project.debug_print(&format!("Created temp directory: {:?}", project.path));
-        project.debug_print(&format!("Temp directory absolute path: {}", project.path.display()));
+        project.debug_print(&format!(
+            "Temp directory absolute path: {}",
+            project.path.display()
+        ));
         if let Some(parent) = project.path.parent() {
             project.debug_print(&format!("Temp directory parent: {}", parent.display()));
         }
@@ -90,16 +66,6 @@ impl TestProject {
         if self.debug_enabled {
             println!("{}", message);
         }
-    }
-
-    // Enable or disable debug output
-    fn set_debug(&mut self, enabled: bool) {
-        self.debug_enabled = enabled;
-    }
-
-    // Check if debug is enabled
-    fn is_debug_enabled(&self) -> bool {
-        self.debug_enabled
     }
 
     // Initializes a new cargo project in the test directory
@@ -136,16 +102,17 @@ impl TestProject {
         let cargo_toml_path = self.path.join("Cargo.toml");
         let mut cargo_toml = fs::read_to_string(&cargo_toml_path)?;
         let current_crate_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let relative_crate_path = get_relative_path(&self.path, &current_crate_path);
 
         self.debug_print("=== Adding husky-rs Dependency Info ===");
         self.debug_print(&format!("Dependency type: {}", dependencies_type));
-        self.debug_print(&format!("Current crate path: {}", current_crate_path.display()));
-        self.debug_print(&format!("Relative path: {:?}", relative_crate_path));
+        self.debug_print(&format!(
+            "Current crate path: {}",
+            current_crate_path.display()
+        ));
         self.debug_print(&format!("Cargo.toml path: {}", cargo_toml_path.display()));
 
         let section = format!("[{}]", dependencies_type);
-        let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", relative_crate_path);
+        let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", current_crate_path);
 
         self.debug_print(&format!("Adding dependency line: {}", husky_rs_dep.trim()));
 
@@ -156,10 +123,16 @@ impl TestProject {
                 .map(|p| p + pos + 1)
                 .unwrap_or(cargo_toml.len());
             cargo_toml.insert_str(insert_pos, &husky_rs_dep);
-            self.debug_print(&format!("Inserted dependency into existing {} section", section));
+            self.debug_print(&format!(
+                "Inserted dependency into existing {} section",
+                section
+            ));
         } else {
             cargo_toml.push_str(&format!("\n{}\n{}", section, husky_rs_dep));
-            self.debug_print(&format!("Created new {} section and added dependency", section));
+            self.debug_print(&format!(
+                "Created new {} section and added dependency",
+                section
+            ));
         }
 
         fs::write(&cargo_toml_path, &cargo_toml)?;
@@ -242,7 +215,10 @@ impl TestProject {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         let success = output.status.success();
 
-        self.debug_print(&format!("Command execution status: {}", if success { "Success" } else { "Failed" }));
+        self.debug_print(&format!(
+            "Command execution status: {}",
+            if success { "Success" } else { "Failed" }
+        ));
 
         if !stdout.is_empty() {
             self.debug_print("--- Standard Output ---");
@@ -309,7 +285,10 @@ impl TestProject {
                     "Hook {} was unexpectedly created or contains husky-rs content",
                     hook
                 );
-                self.debug_print(&format!("✓ Hook {} verification passed (should not exist)", hook));
+                self.debug_print(&format!(
+                    "✓ Hook {} verification passed (should not exist)",
+                    hook
+                ));
             }
         }
 
