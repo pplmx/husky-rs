@@ -52,24 +52,82 @@ fn get_relative_path(from: &Path, to: &Path) -> PathBuf {
 // Struct representing a test project with a path
 struct TestProject {
     path: PathBuf,
+    debug_enabled: bool,
 }
 
 impl TestProject {
     // Creates a new test project in a temporary directory
     fn new(prefix: &str) -> Result<Self, Error> {
+        Self::new_with_debug(prefix, false)
+    }
+
+    // Creates a new test project with optional debug output
+    fn new_with_debug(prefix: &str, debug_enabled: bool) -> Result<Self, Error> {
+        let temp_path = create_temp_dir(prefix)?;
+
         let project = TestProject {
-            path: create_temp_dir(prefix)?,
+            path: temp_path,
+            debug_enabled,
         };
+
+        // Print temporary directory path information
+        project.debug_print("=== TestProject Path Information ===");
+        project.debug_print(&format!("Temp directory prefix: {}", prefix));
+        project.debug_print(&format!("Created temp directory: {:?}", project.path));
+        project.debug_print(&format!("Temp directory absolute path: {}", project.path.display()));
+        if let Some(parent) = project.path.parent() {
+            project.debug_print(&format!("Temp directory parent: {}", parent.display()));
+        }
+        project.debug_print(&format!("Temp directory exists: {}", project.path.exists()));
+        project.debug_print("===================================\n");
+
         project.init()?;
         Ok(project)
     }
 
+    // Helper method for conditional debug printing
+    fn debug_print(&self, message: &str) {
+        if self.debug_enabled {
+            println!("{}", message);
+        }
+    }
+
+    // Enable or disable debug output
+    fn set_debug(&mut self, enabled: bool) {
+        self.debug_enabled = enabled;
+    }
+
+    // Check if debug is enabled
+    fn is_debug_enabled(&self) -> bool {
+        self.debug_enabled
+    }
+
     // Initializes a new cargo project in the test directory
     fn init(&self) -> Result<(), Error> {
+        self.debug_print("Initializing Cargo project...");
+        self.debug_print("Executing command: cargo init --bin");
+        self.debug_print(&format!("Working directory: {}", self.path.display()));
+
         Command::new("cargo")
             .args(["init", "--bin"])
             .current_dir(&self.path)
             .status()?;
+
+        self.debug_print("Cargo project initialization completed\n");
+
+        // Print generated Cargo.toml content
+        let cargo_toml_path = self.path.join("Cargo.toml");
+        if cargo_toml_path.exists() {
+            match fs::read_to_string(&cargo_toml_path) {
+                Ok(content) => {
+                    self.debug_print("=== Generated Cargo.toml Content ===");
+                    self.debug_print(&content);
+                    self.debug_print("==================================\n");
+                }
+                Err(e) => self.debug_print(&format!("Failed to read Cargo.toml: {}\n", e)),
+            }
+        }
+
         Ok(())
     }
 
@@ -80,8 +138,16 @@ impl TestProject {
         let current_crate_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let relative_crate_path = get_relative_path(&self.path, &current_crate_path);
 
+        self.debug_print("=== Adding husky-rs Dependency Info ===");
+        self.debug_print(&format!("Dependency type: {}", dependencies_type));
+        self.debug_print(&format!("Current crate path: {}", current_crate_path.display()));
+        self.debug_print(&format!("Relative path: {:?}", relative_crate_path));
+        self.debug_print(&format!("Cargo.toml path: {}", cargo_toml_path.display()));
+
         let section = format!("[{}]", dependencies_type);
         let husky_rs_dep = format!("husky-rs = {{ path = {:?} }}\n", relative_crate_path);
+
+        self.debug_print(&format!("Adding dependency line: {}", husky_rs_dep.trim()));
 
         // Insert husky-rs into the correct section of Cargo.toml
         if let Some(pos) = cargo_toml.find(&section) {
@@ -90,41 +156,71 @@ impl TestProject {
                 .map(|p| p + pos + 1)
                 .unwrap_or(cargo_toml.len());
             cargo_toml.insert_str(insert_pos, &husky_rs_dep);
+            self.debug_print(&format!("Inserted dependency into existing {} section", section));
         } else {
             cargo_toml.push_str(&format!("\n{}\n{}", section, husky_rs_dep));
+            self.debug_print(&format!("Created new {} section and added dependency", section));
         }
 
-        fs::write(&cargo_toml_path, cargo_toml)?;
+        fs::write(&cargo_toml_path, &cargo_toml)?;
+
+        // Print updated Cargo.toml content
+        self.debug_print("\n=== Updated Cargo.toml Content ===");
+        self.debug_print(&cargo_toml);
+        self.debug_print("=================================\n");
+
         Ok(())
     }
 
     // Creates Husky Git hooks with the given content
     fn create_hooks(&self) -> Result<(), Error> {
         let husky_dir = self.path.join(".husky").join("hooks");
+
+        self.debug_print("=== Creating Husky Git hooks ===");
+        self.debug_print(&format!("Husky hooks directory: {}", husky_dir.display()));
+
         fs::create_dir_all(&husky_dir)?;
+        self.debug_print(&format!("Created directory: {}", husky_dir.display()));
+
         for hook in HOOK_TYPES {
             let path = husky_dir.join(hook);
+            self.debug_print(&format!("Creating hook file: {}", path.display()));
+
             fs::write(&path, HOOK_TEMPLATE)?;
+
+            // Print created hook file content
+            self.debug_print(&format!("--- {} content ---", hook));
+            self.debug_print(HOOK_TEMPLATE);
+            self.debug_print("--- end ---\n");
         }
+
+        self.debug_print("All hooks created successfully\n");
         Ok(())
     }
 
     // Runs a cargo command (e.g., build, test, clean) in the project directory
     fn run_cargo_command(&self, command: &str) -> Result<(), Error> {
+        self.debug_print("=== Executing Cargo Command ===");
+        self.debug_print(&format!("Command: cargo {}", command));
+        self.debug_print(&format!("Working directory: {}", self.path.display()));
+
         let status = Command::new("cargo")
             .arg(command)
             .current_dir(&self.path)
             .status()?;
+
+        self.debug_print(&format!("Command execution status: {}", status));
+
         if status.success() {
+            self.debug_print("Command executed successfully\n");
             Ok(())
         } else {
-            Err(Error::other(
-                // Changed here
-                format!(
-                    "Cargo command `cargo {}` failed with status: {}",
-                    command, status
-                ),
-            ))
+            let error_msg = format!(
+                "Cargo command `cargo {}` failed with status: {}",
+                command, status
+            );
+            self.debug_print(&format!("Command execution failed: {}\n", error_msg));
+            Err(Error::other(error_msg))
         }
     }
 
@@ -133,6 +229,10 @@ impl TestProject {
         &self,
         command_args: &[&str],
     ) -> Result<(String, String, bool), Error> {
+        self.debug_print("=== Executing Cargo Command with Output ===");
+        self.debug_print(&format!("Command: cargo {}", command_args.join(" ")));
+        self.debug_print(&format!("Working directory: {}", self.path.display()));
+
         let output = Command::new("cargo")
             .args(command_args)
             .current_dir(&self.path)
@@ -142,6 +242,22 @@ impl TestProject {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         let success = output.status.success();
 
+        self.debug_print(&format!("Command execution status: {}", if success { "Success" } else { "Failed" }));
+
+        if !stdout.is_empty() {
+            self.debug_print("--- Standard Output ---");
+            self.debug_print(&stdout);
+            self.debug_print("--- Output End ---");
+        }
+
+        if !stderr.is_empty() {
+            self.debug_print("--- Standard Error ---");
+            self.debug_print(&stderr);
+            self.debug_print("--- Error End ---");
+        }
+
+        self.debug_print("==========================================\n");
+
         // No longer returns Err directly on failure, success status is returned instead.
         // The caller can decide how to handle non-success.
         Ok((stdout, stderr, success))
@@ -150,6 +266,11 @@ impl TestProject {
     // Verifies the existence and content of Git hooks
     fn verify_hooks(&self, expect_hooks: bool) -> Result<(), Error> {
         let git_hooks_dir = self.path.join(".git").join("hooks");
+
+        self.debug_print("=== Verifying Git hooks ===");
+        self.debug_print(&format!("Git hooks directory: {}", git_hooks_dir.display()));
+        self.debug_print(&format!("Expected hooks to exist: {}", expect_hooks));
+
         for hook in HOOK_TYPES {
             let hook_path = git_hooks_dir.join(hook);
             let hook_exists = hook_path.exists();
@@ -158,6 +279,16 @@ impl TestProject {
             } else {
                 String::new()
             };
+
+            self.debug_print(&format!("\nChecking hook: {}", hook));
+            self.debug_print(&format!("File path: {}", hook_path.display()));
+            self.debug_print(&format!("File exists: {}", hook_exists));
+
+            if hook_exists {
+                self.debug_print(&format!("--- {} file content ---", hook));
+                self.debug_print(&hook_content);
+                self.debug_print("--- content end ---");
+            }
 
             if expect_hooks {
                 assert!(hook_exists, "Hook {} was not created", hook);
@@ -171,14 +302,18 @@ impl TestProject {
                     "Hook {} does not contain original content",
                     hook
                 );
+                self.debug_print(&format!("✓ Hook {} verification passed", hook));
             } else {
                 assert!(
                     !hook_exists || !hook_content.contains("This hook was set by husky-rs"),
                     "Hook {} was unexpectedly created or contains husky-rs content",
                     hook
                 );
+                self.debug_print(&format!("✓ Hook {} verification passed (should not exist)", hook));
             }
         }
+
+        self.debug_print("===========================\n");
         Ok(())
     }
 }
@@ -571,7 +706,7 @@ fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
 // Test: Verify husky-rs works as a dev dependency with cargo test
 #[test]
 fn test_husky_rs_with_dev_dependencies_and_cargo_test() -> Result<(), Error> {
-    let project = TestProject::new("husky-rs-dev-dep-test-")?;
+    let project = TestProject::new_with_debug("husky-rs-dev-dep-test-", true)?;
     project.add_husky_rs_to_toml("dev-dependencies")?;
     project.create_hooks()?;
     project.run_cargo_command("test")?;
