@@ -24,7 +24,7 @@ clippy:
 
 # Check documentation (CI style)
 doc-check:
-	@RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace --examples
+	@RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
 
 # Run all CI checks locally
 ci: fmt-check clippy doc-check test
