@@ -173,11 +173,7 @@ mod tests {
     fn test_is_valid_hook_name_all_supported() {
         // Verify all hooks in SUPPORTED_HOOKS are valid
         for hook in SUPPORTED_HOOKS {
-            assert!(
-                is_valid_hook_name(hook),
-                "Hook '{}' should be valid",
-                hook
-            );
+            assert!(is_valid_hook_name(hook), "Hook '{}' should be valid", hook);
         }
     }
 
@@ -204,17 +200,35 @@ mod tests {
         );
     }
 
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+
+    // Mutex to properly serialize tests that modify environment variables.
+    // This prevents race conditions when running `cargo test` which runs tests in parallel by default.
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
     #[test]
     fn test_should_skip_installation_not_set() {
+        let _guard = env_lock().lock().unwrap();
         // Ensure clean state
         env::remove_var("NO_HUSKY_HOOKS");
         // Give it a moment to ensure var is actually removed
-        assert!(env::var_os("NO_HUSKY_HOOKS").is_none(), "Env var should be None");
-        assert!(!should_skip_installation(), "Should not skip when env var not set");
+        assert!(
+            env::var_os("NO_HUSKY_HOOKS").is_none(),
+            "Env var should be None"
+        );
+        assert!(
+            !should_skip_installation(),
+            "Should not skip when env var not set"
+        );
     }
 
     #[test]
     fn test_should_skip_installation_set_to_1() {
+        let _guard = env_lock().lock().unwrap();
         env::set_var("NO_HUSKY_HOOKS", "1");
         assert!(should_skip_installation(), "Should skip when set to 1");
         env::remove_var("NO_HUSKY_HOOKS");
@@ -222,6 +236,7 @@ mod tests {
 
     #[test]
     fn test_should_skip_installation_set_to_any_value() {
+        let _guard = env_lock().lock().unwrap();
         env::set_var("NO_HUSKY_HOOKS", "anything");
         assert!(should_skip_installation());
         env::remove_var("NO_HUSKY_HOOKS");
@@ -229,11 +244,9 @@ mod tests {
 
     #[test]
     fn test_should_skip_installation_set_to_empty() {
+        let _guard = env_lock().lock().unwrap();
         env::set_var("NO_HUSKY_HOOKS", "");
-        assert!(
-            should_skip_installation(),
-            "Empty value should still skip"
-        );
+        assert!(should_skip_installation(), "Empty value should still skip");
         env::remove_var("NO_HUSKY_HOOKS");
     }
 

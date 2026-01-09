@@ -115,7 +115,10 @@ fn main() -> Result<()> {
         // Provide helpful error messages based on error type
         match &error {
             HuskyError::GitDirNotFound(path) => {
-                eprintln!("husky-rs: Unable to find .git directory starting from: {}", path);
+                eprintln!(
+                    "husky-rs: Unable to find .git directory starting from: {}",
+                    path
+                );
                 eprintln!("husky-rs: This is normal if you're not in a Git repository.");
             }
             HuskyError::EmptyUserHook(path) => {
@@ -167,7 +170,10 @@ fn install_hooks() -> Result<()> {
     }
 
     if installed_count > 0 {
-        println!("cargo:warning=husky-rs: Installed {} Git hook(s)", installed_count);
+        println!(
+            "cargo:warning=husky-rs: Installed {} Git hook(s)",
+            installed_count
+        );
     }
 
     Ok(())
@@ -229,7 +235,10 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
 
     // Warn if no shebang was found
     if !had_shebang {
-        println!("cargo:warning=husky-rs: Hook '{}' missing shebang, using default: {}", hook_name, shebang);
+        println!(
+            "cargo:warning=husky-rs: Hook '{}' missing shebang, using default: {}",
+            hook_name, shebang
+        );
     }
 
     let final_hook_script_lines = generate_husky_hook_script(shebang, actual_script_body);

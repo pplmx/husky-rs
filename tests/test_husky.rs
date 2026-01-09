@@ -153,7 +153,8 @@ impl TestProject {
         if status.success() {
             Ok(())
         } else {
-            Err(Error::other(
+            Err(Error::new(
+                std::io::ErrorKind::Other,
                 // Changed here
                 format!(
                     "Cargo command `cargo {}` failed with status: {}",
@@ -271,7 +272,9 @@ fn test_husky_rs_with_dep_rel() -> Result<(), Error> {
     println!("[TEST DEP REL] Created test project at: {:?}", project.path);
 
     project.add_husky_rs_to_toml("dependencies", false)?;
-    println!("[TEST DEP REL] Added husky-rs to Cargo.toml as regular dependency with relative path");
+    println!(
+        "[TEST DEP REL] Added husky-rs to Cargo.toml as regular dependency with relative path"
+    );
 
     project.create_hooks()?;
     println!("[TEST DEP REL] Created user hook files in .husky/hooks");
@@ -345,8 +348,8 @@ fn test_husky_rs_with_dev_dep_and_cargo_build() -> Result<(), Error> {
 // Test: Debugging hook installation, using project.create_hooks() and capturing build output
 #[test]
 fn test_shebang_variations() -> Result<(), Error> {
-    env::remove_var("NO_HUSKY_HOOKS"); // Explicitly unset NO_HUSKY_HOOKS
-    println!("[TEST] Ensured NO_HUSKY_HOOKS is not set.");
+    // env::remove_var("NO_HUSKY_HOOKS"); // Explicitly unset NO_HUSKY_HOOKS
+    println!("[TEST] Ensured NO_HUSKY_HOOKS is not set (by avoiding global state args).");
 
     let project = TestProject::new("husky-rs-capture-output-")?;
     println!("[TEST] TestProject path: {}", project.path.display());
@@ -448,7 +451,7 @@ fn test_shebang_variations() -> Result<(), Error> {
 // Test: Verify that empty or whitespace-only user hook scripts are not installed
 #[test]
 fn test_empty_user_hook_script() -> Result<(), Error> {
-    env::remove_var("NO_HUSKY_HOOKS"); // Ensure clean env state for this test too
+    // env::remove_var("NO_HUSKY_HOOKS"); // Ensure clean env state for this test too
 
     let project = TestProject::new("husky-rs-empty-hook-")?;
     project.add_husky_rs_to_toml("dependencies", false)?;
@@ -493,8 +496,8 @@ fn test_empty_user_hook_script() -> Result<(), Error> {
 // Test: Verify husky-rs correctly installs a hook when the user's hook is a symbolic link (Unix-only)
 #[test]
 fn test_symbolic_link_hook() -> Result<(), Error> {
-    env::remove_var("NO_HUSKY_HOOKS");
-    println!("[TEST_SYMLINK] Ensured NO_HUSKY_HOOKS is not set.");
+    // env::remove_var("NO_HUSKY_HOOKS");
+    println!("[TEST_SYMLINK] Ensured NO_HUSKY_HOOKS is not set (by avoiding global state args).");
 
     let project = TestProject::new("husky-rs-symlink-abs-")?; // New prefix for fresh project
     println!(
@@ -606,7 +609,8 @@ fn test_symbolic_link_hook() -> Result<(), Error> {
         if !build_success {
             // It's important to list files even if build fails, to see the state
             // list_files_in_git_hooks(&project.path.join(".git").join("hooks"));
-            return Err(Error::other(
+            return Err(Error::new(
+                std::io::ErrorKind::Other,
                 // Changed here
                 format!(
                     "Cargo build failed for symlink test. Stderr: {}",
@@ -666,8 +670,8 @@ fn test_symbolic_link_hook() -> Result<(), Error> {
 // Test: Verify no hooks are installed if NO_HUSKY_HOOKS is set
 #[test]
 fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
-    std::env::set_var("NO_HUSKY_HOOKS", "1"); // Set for current process (less critical but good for belt-and-suspenders)
-    println!("[TEST NO_HOOKS_ENV_VAR] Set NO_HUSKY_HOOKS=1 for current process.");
+    // std::env::set_var("NO_HUSKY_HOOKS", "1"); // Set for current process (less critical but good for belt-and-suspenders)
+    // println!("[TEST NO_HOOKS_ENV_VAR] Set NO_HUSKY_HOOKS=1 for current process.");
 
     let project = TestProject::new("husky-rs-no-hooks-env-var-")?;
     println!(
@@ -701,11 +705,8 @@ fn test_no_hooks_if_env_var_set() -> Result<(), Error> {
     );
     println!("[TEST NO_HOOKS_ENV_VAR] Cargo build command reported success.");
 
-    // Key verification: husky-rs build script should have seen NO_HUSKY_HOOKS and skipped installation
-    let verify_result = project.verify_hooks(false);
+    // std::env::remove_var("NO_HUSKY_HOOKS"); // Clean up env var for current process
+    // println!("[TEST NO_HOOKS_ENV_VAR] Removed NO_HUSKY_HOOKS from current process environment.");
 
-    std::env::remove_var("NO_HUSKY_HOOKS"); // Clean up env var for current process
-    println!("[TEST NO_HOOKS_ENV_VAR] Removed NO_HUSKY_HOOKS from current process environment.");
-
-    verify_result
+    project.verify_hooks(false)
 }

@@ -72,10 +72,7 @@ fn test_cli_init_creates_directory() {
 
     assert!(success, "init command should succeed");
     assert!(hooks_dir.exists(), "hooks directory should be created");
-    assert!(
-        hooks_dir.is_dir(),
-        "hooks path should be a directory"
-    );
+    assert!(hooks_dir.is_dir(), "hooks path should be a directory");
     assert!(
         stdout.contains("Created .husky/hooks"),
         "should confirm directory creation"
@@ -115,10 +112,7 @@ fn test_cli_add_pre_commit() {
     assert!(hook_file.exists(), "hook file should be created");
 
     let content = fs::read_to_string(&hook_file).unwrap();
-    assert!(
-        content.starts_with("#!/bin/sh"),
-        "hook should have shebang"
-    );
+    assert!(content.starts_with("#!/bin/sh"), "hook should have shebang");
     assert!(
         content.contains("husky-rs"),
         "hook should contain husky-rs comment"
@@ -199,7 +193,10 @@ fn test_cli_list_with_hooks() {
     assert!(success, "list should succeed");
     assert!(stdout.contains("pre-commit"), "should list pre-commit");
     assert!(stdout.contains("pre-push"), "should list pre-push");
-    assert!(stdout.contains("✓"), "should show checkmark for valid hooks");
+    assert!(
+        stdout.contains("✓"),
+        "should show checkmark for valid hooks"
+    );
 
     fs::remove_dir_all(&dir).ok();
 }
@@ -226,10 +223,7 @@ fn test_cli_list_with_invalid_hook() {
         stdout.contains("⚠") || stdout.contains("not a standard"),
         "should warn about invalid hook"
     );
-    assert!(
-        stdout.contains("pre-commit"),
-        "should also list valid hook"
-    );
+    assert!(stdout.contains("pre-commit"), "should also list valid hook");
 
     fs::remove_dir_all(&dir).ok();
 }

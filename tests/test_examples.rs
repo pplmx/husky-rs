@@ -84,7 +84,7 @@ impl ExampleProject {
         if status.success() {
             Ok(())
         } else {
-            Err(Error::other("Build failed"))
+            Err(Error::new(std::io::ErrorKind::Other, "Build failed"))
         }
     }
 
@@ -108,26 +108,33 @@ impl Drop for ExampleProject {
 }
 
 // Validate shell script syntax
+// Validate shell script syntax (Unix only)
 fn validate_shell_syntax(script: &str) -> Result<(), String> {
-    let temp_file = format!("/tmp/husky_validate_{}.sh", rand_suffix());
+    #[cfg(unix)]
+    {
+        let temp_file = format!("/tmp/husky_validate_{}.sh", rand_suffix());
 
-    if let Err(e) = fs::write(&temp_file, script) {
-        return Err(format!("Failed to write temp file: {}", e));
+        if let Err(e) = fs::write(&temp_file, script) {
+            return Err(format!("Failed to write temp file: {}", e));
+        }
+
+        let output = Command::new("sh").args(["-n", &temp_file]).output();
+
+        let _ = fs::remove_file(&temp_file);
+
+        match output {
+            Ok(out) if out.status.success() => Ok(()),
+            Ok(out) => Err(format!(
+                "Shell syntax error: {}",
+                String::from_utf8_lossy(&out.stderr)
+            )),
+            Err(e) => Err(format!("Failed to run sh: {}", e)),
+        }
     }
-
-    let output = Command::new("sh")
-        .args(["-n", &temp_file])
-        .output();
-
-    let _ = fs::remove_file(&temp_file);
-
-    match output {
-        Ok(out) if out.status.success() => Ok(()),
-        Ok(out) => Err(format!(
-            "Shell syntax error: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )),
-        Err(e) => Err(format!("Failed to run sh: {}", e)),
+    #[cfg(not(unix))]
+    {
+        // Skip shell validation on non-Unix platforms
+        Ok(())
     }
 }
 
@@ -372,8 +379,9 @@ if __name__ == "__main__":
     Ok(())
 }
 
-// Test shell syntax validation utility itself
+// Test shell syntax validation utility itself (Unix only)
 #[test]
+#[cfg(unix)]
 fn test_shell_syntax_validator() {
     // Valid script
     let valid = r#"#!/bin/sh

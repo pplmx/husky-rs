@@ -1,4 +1,4 @@
-.PHONY: help build test fmt clippy fix doc image clean
+.PHONY: help build test fmt fmt-check clippy fix doc clean ci
 .DEFAULT_GOAL := help
 
 APP_NAME := husky-rs
@@ -7,44 +7,38 @@ APP_NAME := husky-rs
 build:
 	@cargo build --release
 
-# Run tests
+# Run tests (same as CI)
 test:
-	@cargo test
+	@cargo test --all-features
 
 # Format code
 fmt:
 	@cargo fmt --all
 
-# Run clippy
+# Check formatting (CI style)
+fmt-check:
+	@cargo fmt --all --check
+
+# Run clippy (same as CI)
 clippy:
-	@cargo clippy -- -D warnings
+	@cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+# Run all checks (locally simulate CI)
+ci: fmt-check clippy test
 
 # Fix
 fix:
 	@cargo clippy --fix --allow-dirty --allow-staged --all-targets --all-features --workspace -- -D warnings
+	@cargo fmt --all
 
 # Generate documentation
 doc:
 	@cargo doc --no-deps
 
-# Build image
-image:
-	@docker image build -t $(APP_NAME) .
-
-# Start a compose service
-compose-up:
-	@docker compose -f ./compose.yml -p $(APP_NAME) up -d
-
-# Shutdown a compose service
-compose-down:
-	@docker compose -f ./compose.yml down
-
 # Clean build artifacts
 clean:
 	@cargo clean
 	@rm -rf target
-	@docker compose -f ./compose.yml down -v
-	@docker image rm -f $(APP_NAME)
 
 # Show help
 help:
