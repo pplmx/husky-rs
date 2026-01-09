@@ -216,6 +216,43 @@ impl TestProject {
         }
         Ok(())
     }
+
+    // Get hook content from .git/hooks
+    fn get_hook_content(&self, hook_name: &str) -> Result<String, Error> {
+        let hook_path = self.path.join(".git").join("hooks").join(hook_name);
+        fs::read_to_string(&hook_path)
+    }
+
+    // Assert that a specific hook is installed
+    fn assert_hook_installed(&self, hook_name: &str) {
+        let hook_path = self.path.join(".git").join("hooks").join(hook_name);
+        assert!(
+            hook_path.exists(),
+            "Hook '{}' should be installed at {}",
+            hook_name,
+            hook_path.display()
+        );
+    }
+
+    // Assert that a hook contains specific content
+    fn assert_hook_contains(&self, hook_name: &str, expected_content: &str) {
+        let content = self
+            .get_hook_content(hook_name)
+            .unwrap_or_else(|_| panic!("Hook '{}' should exist", hook_name));
+        assert!(
+            content.contains(expected_content),
+            "Hook '{}' should contain '{}'\nActual content:\n{}",
+            hook_name,
+            expected_content,
+            content
+        );
+    }
+
+    // Modify an existing hook
+    fn modify_hook(&self, hook_name: &str, new_content: &str) -> Result<(), Error> {
+        let hook_path = self.path.join(".husky").join("hooks").join(hook_name);
+        fs::write(&hook_path, new_content)
+    }
 }
 
 // Clean up the test project directory when the object is dropped
