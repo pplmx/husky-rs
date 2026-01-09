@@ -89,8 +89,11 @@ const SHEBANGS: [&str; 8] = [
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-env-changed=NO_HUSKY_HOOKS");
+
+    // Monitor the .husky/hooks directory itself
+    println!("cargo:rerun-if-changed=.husky/hooks");
+
     if env::var_os("NO_HUSKY_HOOKS").is_some() {
-        println!("NO_HUSKY_HOOKS is set, skipping hook installation"); // This should be visible in captured stderr
         return Ok(());
     }
 
@@ -116,20 +119,24 @@ fn install_hooks() -> Result<()> {
 
     fs::create_dir_all(&git_hooks_dir)?;
 
+    let mut installed_count = 0;
     for entry_result in fs::read_dir(&user_hooks_dir)? {
         let entry = entry_result?;
         let user_hook_path = entry.path();
 
-        // Tell cargo to re-run the build script if this file/symlink changes.
-        // Tell cargo to re-run the build script if this file/symlink changes.
-        // This was temporarily removed for debugging test_no_hooks_if_env_var_set
-        // if let Some(path_str) = user_hook_path.to_str() {
-        //     println!("cargo:rerun-if-changed={}", path_str);
-        // }
+        // Tell cargo to re-run the build script if this hook file changes
+        if let Some(path_str) = user_hook_path.to_str() {
+            println!("cargo:rerun-if-changed={}", path_str);
+        }
 
         if is_valid_hook_file(&entry) {
             install_hook(&user_hook_path, &git_hooks_dir)?;
+            installed_count += 1;
         }
+    }
+
+    if installed_count > 0 {
+        println!("cargo:warning=husky-rs: Installed {} Git hook(s)", installed_count);
     }
 
     Ok(())
@@ -178,24 +185,38 @@ fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
 }
 
 fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
+    let hook_name = src.file_name().unwrap().to_string_lossy();
     let dst = dst_dir.join(src.file_name().unwrap());
     let user_script_lines = read_file_lines(src)?;
+
     if user_script_lines.is_empty() {
+        eprintln!("cargo:warning=husky-rs: Skipping empty hook: {}", hook_name);
         return Err(HuskyError::EmptyUserHook(src.to_owned()));
     }
 
-    let (shebang, actual_script_body) = extract_shebang_and_body(user_script_lines);
+    let (shebang, actual_script_body, had_shebang) = extract_shebang_and_body(user_script_lines);
+
+    // Warn if no shebang was found
+    if !had_shebang {
+        println!("cargo:warning=husky-rs: Hook '{}' missing shebang, using default: {}", hook_name, shebang);
+    }
+
     let final_hook_script_lines = generate_husky_hook_script(shebang, actual_script_body);
-    write_executable_file(&dst, &final_hook_script_lines)
+    write_executable_file(&dst, &final_hook_script_lines)?;
+
+    println!("cargo:warning=husky-rs: ✓ {}", hook_name);
+    Ok(())
 }
 
 // Extracts shebang and body from user script lines.
-// Returns default shebang if not found or if script is empty.
-fn extract_shebang_and_body(user_script_lines: Vec<String>) -> (String, Vec<String>) {
-    let mut actual_script_body = user_script_lines; // No clone needed if we consume it
+// Returns (shebang, body, had_shebang_flag)
+fn extract_shebang_and_body(user_script_lines: Vec<String>) -> (String, Vec<String>, bool) {
+    let mut actual_script_body = user_script_lines;
+    let mut had_shebang = false;
 
     let shebang = if let Some(first_line) = actual_script_body.first() {
         if SHEBANGS.contains(&first_line.trim()) {
+            had_shebang = true;
             let s = first_line.trim().to_string();
             actual_script_body = actual_script_body.into_iter().skip(1).collect();
             s
@@ -203,11 +224,10 @@ fn extract_shebang_and_body(user_script_lines: Vec<String>) -> (String, Vec<Stri
             "#!/usr/bin/env bash".to_string()
         }
     } else {
-        // This case should ideally not be hit if install_hook checks for empty user_script_lines
         "#!/usr/bin/env bash".to_string()
     };
 
-    (shebang, actual_script_body)
+    (shebang, actual_script_body, had_shebang)
 }
 
 // Generates the full hook script content with husky header.
