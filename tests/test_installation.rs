@@ -290,3 +290,117 @@ husky-rs = {{ path = {:?} }}
     let _ = fs::remove_dir_all(&ws);
     Ok(())
 }
+
+// ============================================================================
+// Error Messages
+// ============================================================================
+
+/// Error message for empty hook is clear.
+#[test]
+fn test_error_message_empty_hook() -> Result<(), Error> {
+    let project = TestProject::new("error-empty-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    let hooks_dir = project.path.join(".husky").join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+    fs::write(hooks_dir.join("pre-commit"), "")?;
+
+    let result = project.cargo(&["build"])?;
+    assert!(!result.success);
+    assert!(
+        result.stderr.contains("empty") || result.stderr.contains("Empty"),
+        "Error should mention 'empty'"
+    );
+    Ok(())
+}
+
+// ============================================================================
+// Multiple Hooks
+// ============================================================================
+
+/// Install all supported hook types simultaneously.
+#[test]
+fn test_install_all_hook_types() -> Result<(), Error> {
+    let project = TestProject::new("install-all-hooks-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    // Create all supported hooks
+    let all_hooks = [
+        "pre-commit",
+        "prepare-commit-msg",
+        "commit-msg",
+        "post-commit",
+        "pre-push",
+        "pre-rebase",
+        "post-rewrite",
+        "post-checkout",
+        "post-merge",
+        "pre-auto-gc",
+    ];
+
+    for hook in &all_hooks {
+        project.create_hook(hook, &format!("#!/bin/sh\necho '{}'\n", hook))?;
+    }
+
+    project.build()?;
+
+    // Verify all hooks installed
+    for hook in &all_hooks {
+        project.assert_hook_installed(hook);
+        project.assert_hook_contains(hook, hook);
+    }
+    Ok(())
+}
+
+// ============================================================================
+// Git Worktrees
+// ============================================================================
+
+/// Install in Git worktree.
+#[test]
+fn test_install_in_worktree() -> Result<(), Error> {
+    let main_repo = create_temp_dir("install-wt-main-")?;
+
+    // Setup main repo
+    run_command_success("git", &["init"], &main_repo)?;
+    run_command_success("git", &["config", "user.email", "t@t.com"], &main_repo)?;
+    run_command_success("git", &["config", "user.name", "T"], &main_repo)?;
+    run_command_success("cargo", &["init", "--bin"], &main_repo)?;
+    run_command_success("git", &["add", "."], &main_repo)?;
+    run_command_success("git", &["commit", "-m", "init"], &main_repo)?;
+
+    // Create worktree
+    let worktree = create_temp_dir("install-wt-tree-")?;
+    let _ = fs::remove_dir_all(&worktree); // git worktree add needs non-existent dir
+
+    let result = run_command(
+        "git",
+        &["worktree", "add", worktree.to_str().unwrap(), "-b", "wt"],
+        &main_repo,
+    )?;
+
+    if !result.success {
+        let _ = fs::remove_dir_all(&main_repo);
+        return Ok(()); // Skip if worktree not supported
+    }
+
+    // Verify .git is a file in worktree
+    let git_path = worktree.join(".git");
+    assert!(git_path.is_file(), ".git should be a file in worktree");
+
+    // Add husky and build
+    add_husky_dependency(&worktree.join("Cargo.toml"), &get_husky_rs_path())?;
+    create_hook(&worktree, "pre-commit", "#!/bin/sh\necho 'wt'\n")?;
+
+    let build = run_command("cargo", &["build"], &worktree)?;
+    assert!(build.success);
+
+    // Cleanup
+    run_command(
+        "git",
+        &["worktree", "remove", worktree.to_str().unwrap()],
+        &main_repo,
+    )?;
+    let _ = fs::remove_dir_all(&main_repo);
+    Ok(())
+}
