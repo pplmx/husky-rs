@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-01-09
+
+### 🧪 Testing
+
+- **Test infrastructure refactoring**: Consolidated test utilities into `tests/common/mod.rs`
+- **Test reorganization**: Merged 4 test files into 2 clear files (`test_installation.rs`, `test_hooks.rs`)
+- **New test scenarios**: Git worktrees, multiple hooks (10 types), error message validation
+- **Total**: 41 tests covering submodules, workspaces, worktrees, and edge cases
+
+### 🔧 CI/CD
+
+- **Code coverage**: Added `coverage.yml` workflow with tarpaulin and Codecov integration
+- **Coverage badge**: Added to README
+
+### 📦 Build
+
+- **Makefile improvements**:
+    - Added `make coverage` target
+    - Added `make doc-check` target
+    - Included `doc-check` in `make ci`
+    - Fixed CRLF line endings
+- **.gitignore**: Added coverage report files
+
+---
+
 ## [0.2.1] - 2026-01-09
 
 ### 🐛 Bug Fixes
