@@ -1,0 +1,37 @@
+# Base rules enabled
+default: true
+
+# Unordered list indentation (clean structure)
+MD007:
+    indent: 4
+
+# Line length: readable for prose, flexible for code
+MD013:
+    line_length: 256
+    code_blocks: false
+    tables: false
+
+# Only forbid duplicate headings at the same level
+MD024:
+    siblings_only: true
+
+# One top-level heading is optional for README
+MD025: false
+
+# Allow inline HTML (<br>, <details>, badges)
+MD033: false
+
+# Require language on fenced code blocks
+MD040: true
+
+# No trailing spaces (avoid noisy diffs)
+MD009: true
+
+# Allow emphasis inside headings
+MD026:
+    punctuation: ".,;:!"
+
+# Do not enforce ordered list numbering style
+MD029: false
+
+MD036: false

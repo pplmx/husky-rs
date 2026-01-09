@@ -9,10 +9,14 @@
 
 ## Features
 
-- **Easy setup and configuration**
-- **Automatic installation of Git hooks**
-- **Support for all Git hooks**
-- **Cross-platform compatibility** (Unix-like systems and Windows)
+- 🚀 **Zero-configuration** - Just add the dependency and create hooks
+- ⚡ **Automatic installation** - Hooks install on `cargo build` or `cargo test`
+- 🔄 **Smart rerun detection** - No need for `cargo clean` when updating hooks
+- ✅ **Comprehensive validation** - Warns about empty hooks and missing shebangs
+- 🎯 **All 27 Git hooks supported** - Client-side and server-side hooks
+- 🌍 **Cross-platform** - Works on Unix-like systems and Windows
+- 🛠️ **Optional CLI tool** - `husky init`, `husky add`, `husky list` commands
+- 📚 **Optional library API** - Helper functions for advanced use cases
 
 ## Quick Start
 
@@ -56,33 +60,78 @@
    cargo test
    ```
 
----
-
 **Tip:** If you add this library to the `[dependencies]` section, both `cargo build` and `cargo test` will work. However, if it's added under `[dev-dependencies]`, only `cargo test` will function as expected.
 
 ## Usage
 
 ### Supported Git Hooks
 
-`husky-rs` aims to support a wide range of Git hooks, including:
+`husky-rs` supports all 27 Git hooks, including:
 
-- `pre-commit`
-- `prepare-commit-msg`
-- `commit-msg`
-- `post-commit`
-- `pre-push`
+- `pre-commit` - Run before commit is created
+- `prepare-commit-msg` - Edit commit message before committing
+- `commit-msg` - Validate commit message format
+- `post-commit` - Run after commit is created
+- `pre-push` - Run before pushing to remote
+- And 22 more...
 
-For a complete list of supported hooks, refer to the [Git documentation](https://git-scm.com/docs/githooks).
+For a complete list, refer to the [Git documentation](https://git-scm.com/docs/githooks).
 
-If you encounter any unsupported hooks, please don't hesitate to [open an issue](https://github.com/pplmx/husky-rs/issues).
+If you encounter any unsupported hooks, please [open an issue](https://github.com/pplmx/husky-rs/issues).
 
 ### Configuration
 
-To skip hook installation:
+To skip hook installation (useful in CI environments):
 
 ```sh
 NO_HUSKY_HOOKS=1 cargo build
 ```
+
+You can also set this in your environment or CI configuration.
+
+## Optional Tools
+
+### CLI Tool
+
+For added convenience, install the `husky` command-line tool:
+
+```sh
+cargo install husky-rs --features=cli
+```
+
+The CLI provides helpful commands:
+
+```sh
+husky init              # Create .husky/hooks directory
+husky add pre-commit    # Add hook from smart template
+husky list              # List all installed hooks
+husky help              # Show help
+```
+
+*Note*: The CLI is completely optional - the core functionality works without it!
+
+### Library API
+
+For advanced use cases, husky-rs exposes utility functions:
+
+```rust
+use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
+
+// Check if hook installation should be skipped
+if !should_skip_installation() {
+    let hooks_path = hooks_dir(".");
+    println!("Hooks directory: {}", hooks_path.display());
+}
+
+// Validate a hook name
+if is_valid_hook_name("pre-commit") {
+    println!("Valid hook!");
+}
+```
+
+See [API documentation](https://docs.rs/husky-rs) for more details.
+
+*Note*: You don't need to call any functions for basic usage - just add the dependency!
 
 ## Best Practices
 
@@ -90,13 +139,14 @@ NO_HUSKY_HOOKS=1 cargo build
 - Use hooks for tasks like running tests, linting code, and validating commit messages
 - Non-zero exit status in a hook script will abort the Git operation
 
-## Development
+## Documentation
 
-For information on setting up the development environment, running tests, and contributing to the project, please refer to our [Development Guide](docs/development.md).
+📖 **Complete guides for all users:**
 
-## Troubleshooting
-
-If you encounter any issues while using `husky-rs`, please check our [Troubleshooting Guide](docs/troubleshooting.md) for common problems and their solutions. If you can't find a solution to your problem, please [open an issue](https://github.com/pplmx/husky-rs/issues) on our GitHub repository.
+- [Usage Guide](docs/usage.md) - Installation, configuration, and advanced usage
+- [Examples](docs/examples.md) - 13 ready-to-use hook examples
+- [Troubleshooting](docs/troubleshooting.md) - Solutions to common issues
+- [Development](docs/development.md) - Contributing guide
 
 ## Contributing
 

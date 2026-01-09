@@ -189,7 +189,7 @@ impl TestProject {
             let hook_path = git_hooks_dir.join(hook);
             let hook_exists = hook_path.exists();
             let hook_content = if hook_exists {
-                fs::read_to_string(&hook_path)?
+                self.get_hook_content(hook)?
             } else {
                 String::new()
             };
@@ -248,7 +248,8 @@ impl TestProject {
         );
     }
 
-    // Modify an existing hook
+    // Modify an existing hook (for future test use)
+    #[allow(dead_code)]
     fn modify_hook(&self, hook_name: &str, new_content: &str) -> Result<(), Error> {
         let hook_path = self.path.join(".husky").join("hooks").join(hook_name);
         fs::write(&hook_path, new_content)
@@ -265,11 +266,28 @@ impl Drop for TestProject {
 // Test: Verify husky-rs works as a regular dependency using the relative path
 #[test]
 fn test_husky_rs_with_dep_rel() -> Result<(), Error> {
+    println!("[TEST DEP REL] Starting test: husky-rs as regular dependency with relative path");
     let project = TestProject::new("husky-rs-dep-rel-test-")?;
+    println!("[TEST DEP REL] Created test project at: {:?}", project.path);
+
     project.add_husky_rs_to_toml("dependencies", false)?;
+    println!("[TEST DEP REL] Added husky-rs to Cargo.toml as regular dependency with relative path");
+
     project.create_hooks()?;
+    println!("[TEST DEP REL] Created user hook files in .husky/hooks");
+
     project.run_cargo_command("build")?;
-    project.verify_hooks(true)
+    println!("[TEST DEP REL] Executed `cargo build` successfully");
+
+    // Use new helper methods for validation
+    for hook in HOOK_TYPES {
+        project.assert_hook_installed(hook);
+        project.assert_hook_contains(hook, "This hook was set by husky-rs");
+        project.assert_hook_contains(hook, "This is a test hook");
+    }
+    println!("[TEST DEP REL] All hooks verified using helper methods");
+
+    Ok(())
 }
 
 // Test: Verify husky-rs works as a regular dependency using the absolute path

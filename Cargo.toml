@@ -1,13 +1,17 @@
 [package]
 name = "husky-rs"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
-description = "husky for cargo"
+rust-version = "1.70"
+description = "Git hooks manager for Rust projects - automatically install and manage Git hooks on build"
 authors = ["Mystic"]
 repository = "https://github.com/pplmx/husky-rs"
 homepage = "https://github.com/pplmx/husky-rs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
+keywords = ["git", "hooks", "husky", "development-tools", "pre-commit"]
+categories = ["development-tools", "command-line-utilities"]
+exclude = [".github/", "tests/fixtures/"]
 build = "build.rs"
 
 [[bin]]
