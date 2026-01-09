@@ -1,6 +1,7 @@
 # husky-rs
 
 [![CI](https://github.com/pplmx/husky-rs/workflows/CI/badge.svg)](https://github.com/pplmx/husky-rs/actions)
+[![Coverage](https://codecov.io/gh/pplmx/husky-rs/graph/badge.svg)](https://codecov.io/gh/pplmx/husky-rs)
 [![Crates.io](https://img.shields.io/crates/v/husky-rs.svg)](https://crates.io/crates/husky-rs)
 [![Documentation](https://docs.rs/husky-rs/badge.svg)](https://docs.rs/husky-rs)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
