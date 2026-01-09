@@ -1,3 +1,17 @@
+//! Build script for husky-rs
+//!
+//! This build script automatically installs Git hooks from `.husky/hooks/` to `.git/hooks/`
+//! during the build process.
+//!
+//! ## How it works
+//!
+//! 1. Checks for the `NO_HUSKY_HOOKS` environment variable to skip installation
+//! 2. Locates the `.git` directory (supports both regular repos and submodules)
+//! 3. Reads all hook files from `.husky/hooks/`
+//! 4. Validates each hook (checks for empty files, missing shebangs)
+//! 5. Wraps user hooks with husky-rs header and installs to `.git/hooks/`
+//! 6. Sets executable permissions (Unix-like systems)
+
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Write};
@@ -98,7 +112,24 @@ fn main() -> Result<()> {
     }
 
     install_hooks().or_else(|error| {
-        eprintln!("Error during hook installation: {}", error);
+        // Provide helpful error messages based on error type
+        match &error {
+            HuskyError::GitDirNotFound(path) => {
+                eprintln!("husky-rs: Unable to find .git directory starting from: {}", path);
+                eprintln!("husky-rs: This is normal if you're not in a Git repository.");
+            }
+            HuskyError::EmptyUserHook(path) => {
+                eprintln!("husky-rs: Skipped empty hook file: {}", path.display());
+            }
+            HuskyError::Io(e) => {
+                eprintln!("husky-rs: I/O error during hook installation: {}", e);
+            }
+            HuskyError::Env(e) => {
+                eprintln!("husky-rs: Environment variable error: {}", e);
+            }
+        }
+
+        // Only tolerate GitDirNotFound (not in a git repo is OK)
         matches!(error, HuskyError::GitDirNotFound(_))
             .then_some(())
             .ok_or(error)
