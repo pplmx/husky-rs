@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-01-09
+
+### 🐛 Bug Fixes
+
+- **CI/Cross-platform**: Fixed lint errors, MSRV compliance (Rust 1.70), and race conditions in tests.
+- **Windows Support**: Improved test stability on Windows by skipping shell syntax validation where `sh` is unavailable.
+- **Makefile**: Added `make ci` and updated test commands to consistent with CI configuration.
+
+---
+
 ## [0.2.0] - 2026-01-09
 
 ### 🎯 Highlights
@@ -173,6 +183,7 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ---
 
+[0.2.1]: https://github.com/pplmx/husky-rs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/pplmx/husky-rs/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/pplmx/husky-rs/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/pplmx/husky-rs/compare/v0.1.3...v0.1.4
