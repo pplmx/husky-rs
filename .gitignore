@@ -17,3 +17,10 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Coverage reports
+coverage/
+*.profraw
+*.profdata
+tarpaulin-report.html
+cobertura.xml
