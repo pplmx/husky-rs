@@ -46,10 +46,14 @@
 
 4. Install hooks:
 
-   > **Note:** Due to the execution mechanism of `build.rs`, running `cargo clean` is required when installing or updating hooks.
+   ```sh
+   cargo build
+   ```
+
+   Or if you're using as a dev-dependency:
 
    ```sh
-   cargo clean && cargo test
+   cargo test
    ```
 
 ---
@@ -102,8 +106,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 This project is licensed under either of:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 
