@@ -9,3 +9,12 @@ homepage = "https://github.com/pplmx/husky-rs"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 build = "build.rs"
+
+[[bin]]
+name = "husky"
+path = "src/bin/husky.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = []

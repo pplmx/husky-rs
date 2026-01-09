@@ -1,0 +1,280 @@
+//! husky-rs CLI tool
+//!
+//! Optional command-line interface for managing Git hooks.
+//! Install with: cargo install husky-rs --features=cli
+
+use std::env;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
+use std::process;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        print_help();
+        process::exit(0);
+    }
+
+    let result = match args[1].as_str() {
+        "init" => init_husky(),
+        "add" => {
+            if args.len() < 3 {
+                eprintln!("Error: 'add' command requires a hook name");
+                eprintln!("Usage: husky add <hook-name>");
+                process::exit(1);
+            }
+            add_hook(&args[2])
+        }
+        "list" => list_hooks(),
+        "version" | "-v" | "--version" => {
+            println!("husky-rs v{}", VERSION);
+            Ok(())
+        }
+        "help" | "-h" | "--help" => {
+            print_help();
+            Ok(())
+        }
+        _ => {
+            eprintln!("Unknown command: {}", args[1]);
+            print_help();
+            process::exit(1);
+        }
+    };
+
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        process::exit(1);
+    }
+}
+
+fn print_help() {
+    println!("husky-rs v{}", VERSION);
+    println!("Git hooks management for Rust projects");
+    println!();
+    println!("USAGE:");
+    println!("    husky <COMMAND>");
+    println!();
+    println!("COMMANDS:");
+    println!("    init              Create .husky/hooks directory");
+    println!("    add <hook-name>   Create a new hook from template");
+    println!("    list              List all hooks in .husky/hooks");
+    println!("    help              Print this help message");
+    println!("    version           Print version information");
+    println!();
+    println!("EXAMPLES:");
+    println!("    husky init");
+    println!("    husky add pre-commit");
+    println!("    husky add commit-msg");
+    println!("    husky list");
+    println!();
+    println!("For more information, visit: https://github.com/pplmx/husky-rs");
+}
+
+fn init_husky() -> io::Result<()> {
+    let hooks_dir = Path::new(".husky").join("hooks");
+
+    if hooks_dir.exists() {
+        println!("✓ .husky/hooks already exists");
+        return Ok(());
+    }
+
+    fs::create_dir_all(&hooks_dir)?;
+    println!("✓ Created .husky/hooks directory");
+    println!();
+    println!("Next steps:");
+    println!("  1. Add husky-rs to your Cargo.toml:");
+    println!("     cargo add husky-rs");
+    println!("  2. Create hooks:");
+    println!("     husky add pre-commit");
+    println!("  3. Build your project to install hooks:");
+    println!("     cargo build");
+
+    Ok(())
+}
+
+fn add_hook(hook_name: &str) -> io::Result<()> {
+    // Validate hook name
+    if !husky_rs::is_valid_hook_name(hook_name) {
+        eprintln!("Warning: '{}' is not a standard Git hook name", hook_name);
+        eprintln!();
+        eprintln!("Standard hooks include:");
+        for (i, hook) in husky_rs::SUPPORTED_HOOKS.iter().enumerate() {
+            if i % 3 == 0 {
+                print!("  ");
+            }
+            print!("{:<25}", hook);
+            if (i + 1) % 3 == 0 {
+                println!();
+            }
+        }
+        println!();
+        print!("Continue anyway? [y/N]: ");
+        io::stdout().flush()?;
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        if !input.trim().eq_ignore_ascii_case("y") {
+            println!("Cancelled");
+            return Ok(());
+        }
+    }
+
+    let hooks_dir = Path::new(".husky").join("hooks");
+    if !hooks_dir.exists() {
+        fs::create_dir_all(&hooks_dir)?;
+        println!("✓ Created .husky/hooks directory");
+    }
+
+    let hook_path = hooks_dir.join(hook_name);
+    if hook_path.exists() {
+        eprintln!("Error: Hook '{}' already exists at:", hook_name);
+        eprintln!("  {}", hook_path.display());
+        eprintln!();
+        eprintln!("Edit the file directly or remove it first.");
+        process::exit(1);
+    }
+
+    let template = get_hook_template(hook_name);
+    fs::write(&hook_path, template)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&hook_path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&hook_path, perms)?;
+    }
+
+    println!("✓ Created hook: {}", hook_name);
+    println!("  {}", hook_path.display());
+    println!();
+    println!("Edit the hook file to customize it, then run:");
+    println!("  cargo build");
+
+    Ok(())
+}
+
+fn list_hooks() -> io::Result<()> {
+    let hooks_dir = Path::new(".husky").join("hooks");
+
+    if !hooks_dir.exists() {
+        println!("No hooks directory found.");
+        println!("Run 'husky init' to create it.");
+        return Ok(());
+    }
+
+    let entries: Vec<_> = fs::read_dir(&hooks_dir)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_file())
+        .collect();
+
+    if entries.is_empty() {
+        println!("No hooks found in .husky/hooks/");
+        println!("Run 'husky add <hook-name>' to create one.");
+        return Ok(());
+    }
+
+    println!("Hooks in .husky/hooks/:");
+    for entry in entries {
+        let name = entry.file_name();
+
+        let is_valid = husky_rs::is_valid_hook_name(&name.to_string_lossy());
+        let indicator = if is_valid { "✓" } else { "⚠" };
+
+        println!("  {} {}", indicator, name.to_string_lossy());
+
+        if !is_valid {
+            println!("     (not a standard Git hook name)");
+        }
+    }
+
+    Ok(())
+}
+
+fn get_hook_template(hook_name: &str) -> String {
+    match hook_name {
+        "pre-commit" => {
+            r#"#!/bin/sh
+# husky-rs pre-commit hook
+
+echo "Running pre-commit checks..."
+
+# Run tests
+cargo test --quiet || {
+    echo "❌ Tests failed!"
+    exit 1
+}
+
+# Check formatting
+cargo fmt --check || {
+    echo "❌ Code is not formatted. Run: cargo fmt"
+    exit 1
+}
+
+echo "✓ Pre-commit checks passed"
+"#
+        }
+        "commit-msg" => {
+            r#"#!/bin/sh
+# husky-rs commit-msg hook
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file")
+
+# Example: Check minimum message length
+if [ ${#commit_msg} -lt 10 ]; then
+    echo "❌ Commit message too short (minimum 10 characters)"
+    exit 1
+fi
+
+# Example: Check for conventional commits format
+# Uncomment the following to enforce conventional commits:
+# if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore):"; then
+#     echo "❌ Commit message must follow conventional commits format"
+#     echo "   Examples: feat: add feature, fix: bug fix"
+#     exit 1
+# fi
+
+echo "✓ Commit message valid"
+"#
+        }
+        "pre-push" => {
+            r#"#!/bin/sh
+# husky-rs pre-push hook
+
+echo "Running pre-push checks..."
+
+# Run comprehensive checks before pushing
+set -e
+
+echo "1/3 Checking format..."
+cargo fmt --check
+
+echo "2/3 Running linter..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "3/3 Running tests..."
+cargo test
+
+echo "✅ All checks passed! Pushing..."
+"#
+        }
+        _ => {
+            r#"#!/bin/sh
+# husky-rs hook
+
+echo "Running hook..."
+
+# Add your hook logic here
+# Exit with non-zero status to abort the Git operation
+
+echo "✓ Hook completed"
+"#
+        }
+    }
+    .to_string()
+}
