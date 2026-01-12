@@ -20,7 +20,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
+        uses: taiki-e/install-action@cargo-tarpaulin
 
       - name: Generate coverage report
         run: cargo tarpaulin --all-features --workspace --exclude-files 'src/bin/*' --out xml --output-dir coverage

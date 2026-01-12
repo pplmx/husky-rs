@@ -10,6 +10,10 @@ build:
 test:
 	@cargo test --all-features --workspace
 
+# Run tests by cargo-nextest(A much more modern test runner)
+nextest:
+	@cargo nextest run --all-features --workspace
+
 # Format code
 fmt:
 	@cargo fmt --all
