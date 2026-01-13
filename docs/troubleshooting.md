@@ -44,7 +44,7 @@ Common issues and solutions when using husky-rs.
    ```
 
 3. **Check for hooks installed by other tools:**
-   Old hooks might be被 overwritten. Reinstall:
+   Old hooks might be overwritten. Reinstall:
 
    ```sh
    cargo build
@@ -101,7 +101,7 @@ cargo build
 
 **Error:**
 
-```
+```text
 Error: EmptyUserHook("/path/to/.husky/hooks/pre-commit")
 ```
 
@@ -127,7 +127,7 @@ echo "Running hook"
 
 **Error:**
 
-```
+```text
 Error: GitDirNotFound("/path/to/project")
 ```
 
@@ -158,7 +158,7 @@ Error: GitDirNotFound("/path/to/project")
 
 **Error:**
 
-```
+```text
 error: failed to run custom build command for `husky-rs`
 ```
 
@@ -230,7 +230,7 @@ cargo build
 
 **Error:**
 
-```
+```text
 .git/hooks/pre-commit: /usr/bin/env: 'python3': No such file or directory
 ```
 
@@ -259,7 +259,7 @@ Or change shebang to installed interpreter:
 
 **Symptoms:**
 
-- Git operations느 느려짐
+- Git operations slow down
 - Commits take 30+ seconds
 
 **Solutions:**
@@ -449,7 +449,7 @@ cargo build -vv 2>&1 | grep husky
 
 Look for lines like:
 
-```
+```text
 cargo:warning=husky-rs: ✓ pre-commit
 cargo:warning=husky-rs: Installed 3 Git hook(s)
 ```

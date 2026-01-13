@@ -6,8 +6,6 @@ This document will walk you through setting up your development environment, run
 ## Table of Contents
 
 - [Setting Up the Development Environment](#setting-up-the-development-environment)
-    - [Prerequisites](#prerequisites)
-    - [Installation Steps](#installation-steps)
 - [Running Tests](#running-tests)
 - [Building the Project](#building-the-project)
 - [Code Style and Linting](#code-style-and-linting)
@@ -26,6 +24,7 @@ This document will walk you through setting up your development environment, run
 
     ```bash
     make build
+    # Or: cargo build
     ```
 
 ## Running Tests
@@ -34,6 +33,7 @@ Tests are crucial to ensure the stability of the project. To run all tests, use 
 
 ```bash
 make test
+# Or: cargo test
 ```
 
 This command will compile the code and run all tests, ensuring all components work as expected.
@@ -46,6 +46,7 @@ To build the project in release mode, use:
 
 ```bash
 make build
+# Or: cargo build --release
 ```
 
 This command will generate an optimized executable in the `target/release` directory.
@@ -58,12 +59,14 @@ To format your code, run:
 
 ```bash
 make fmt
+# Or: cargo fmt
 ```
 
 To run the linter:
 
 ```bash
 make clippy
+# Or: cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 These commands will automatically check and optionally fix any code style issues according to the project's style guide.
@@ -74,6 +77,7 @@ To generate the project documentation, run:
 
 ```bash
 make doc
+# Or: cargo doc --no-deps
 ```
 
 This will create the documentation for your project and its dependencies.
@@ -84,6 +88,7 @@ To clean up build artifacts and other generated files, you can use:
 
 ```bash
 make clean
+# Or: cargo clean
 ```
 
 This will remove the `target` directory and clean up any Docker-related resources.

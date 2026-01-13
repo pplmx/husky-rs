@@ -35,7 +35,7 @@ EOF
 cargo build
 ```
 
-That's it! Your hook is now installed and will run before每 commit.
+That's it! Your hook is now installed and will run before every commit.
 
 ## Installation Methods
 
@@ -45,7 +45,7 @@ Hooks install on both `cargo build` and `cargo test`:
 
 ```toml
 [dependencies]
-husky-rs = "0.1"
+husky-rs = "0.2"
 ```
 
 ```sh
@@ -58,7 +58,7 @@ Hooks only install on `cargo test` (recommended for most projects):
 
 ```toml
 [dev-dependencies]
-husky-rs = "0.1"
+husky-rs = "0.2"
 ```
 
 ```sh
