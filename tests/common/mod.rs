@@ -8,6 +8,7 @@
 use std::env;
 use std::fs;
 use std::io::Error;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -44,11 +45,49 @@ pub fn is_writable(path: &Path) -> bool {
     }
 }
 
+/// A temporary directory that is automatically removed when dropped.
+#[derive(Debug)]
+pub struct TempDir {
+    path: PathBuf,
+}
+
+impl TempDir {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Deref for TempDir {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        &self.path
+    }
+}
+
+impl AsRef<Path> for TempDir {
+    fn as_ref(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
 /// Create a temporary directory with the given prefix.
 ///
 /// Prefers the parent directory of the current crate for better cleanup,
 /// falls back to system temp directory.
-pub fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
+pub fn create_temp_dir(prefix: &str) -> Result<TempDir, Error> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -60,7 +99,7 @@ pub fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
         if is_writable(parent_path) {
             let temp_dir = parent_path.join(format!("{}{}", prefix, timestamp));
             if fs::create_dir_all(&temp_dir).is_ok() {
-                return Ok(temp_dir);
+                return Ok(TempDir::new(temp_dir));
             }
         }
     }
@@ -68,7 +107,7 @@ pub fn create_temp_dir(prefix: &str) -> Result<PathBuf, Error> {
     // Fallback to system temp directory
     let temp_dir = env::temp_dir().join(format!("{}{}", prefix, timestamp));
     fs::create_dir_all(&temp_dir)?;
-    Ok(temp_dir)
+    Ok(TempDir::new(temp_dir))
 }
 
 /// Get the path to the husky-rs crate being tested.
@@ -257,7 +296,7 @@ pub fn assert_hook_contains(project_path: &Path, hook_name: &str, expected: &str
 
 /// A wrapper for a temporary test project with automatic cleanup.
 pub struct TestProject {
-    pub path: PathBuf,
+    pub path: TempDir,
 }
 
 impl TestProject {
@@ -380,11 +419,7 @@ impl TestProject {
     }
 }
 
-impl Drop for TestProject {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
-}
+// Note: Cleanup is handled automatically by TempDir's Drop implementation
 
 // ============================================================================
 // Shell Validation (Unix only)

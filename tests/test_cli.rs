@@ -5,14 +5,14 @@ mod common;
 use common::create_temp_dir;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 // ============================================================================
 // CLI Helper
 // ============================================================================
 
-fn run_husky(args: &[&str], cwd: &PathBuf) -> (String, String, bool) {
+fn run_husky(args: &[&str], cwd: &Path) -> (String, String, bool) {
     let output = Command::new(env!("CARGO_BIN_EXE_husky"))
         .args(args)
         .current_dir(cwd)
@@ -39,8 +39,6 @@ fn test_cli_help() {
     assert!(stdout.contains("USAGE:"));
     assert!(stdout.contains("COMMANDS:"));
     assert!(stdout.contains("init") && stdout.contains("add"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -50,8 +48,6 @@ fn test_cli_version() {
 
     assert!(success);
     assert!(stdout.contains("husky-rs"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -66,8 +62,6 @@ fn test_cli_init_creates_directory() {
     assert!(success);
     assert!(hooks_dir.exists() && hooks_dir.is_dir());
     assert!(stdout.contains("Created .husky/hooks"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -80,8 +74,6 @@ fn test_cli_init_already_exists() {
 
     assert!(success);
     assert!(stdout.contains("already exists"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -98,8 +90,6 @@ fn test_cli_add_pre_commit() {
     assert!(content.starts_with("#!/bin/sh"));
     assert!(content.contains("husky-rs"));
     assert!(stdout.contains("Created hook: pre-commit"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -112,8 +102,6 @@ fn test_cli_add_commit_msg() {
     assert!(hook_file.exists());
     let content = fs::read_to_string(&hook_file).unwrap();
     assert!(content.contains("commit_msg"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -126,8 +114,6 @@ fn test_cli_add_duplicate_hook() {
     let (_, stderr, success2) = run_husky(&["add", "pre-commit"], &dir);
     assert!(!success2);
     assert!(stderr.contains("already exists"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -139,8 +125,6 @@ fn test_cli_list_no_hooks() {
 
     assert!(success);
     assert!(stdout.contains("No hooks found") || stdout.contains("husky init"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -154,8 +138,6 @@ fn test_cli_list_with_hooks() {
     assert!(success);
     assert!(stdout.contains("pre-commit") && stdout.contains("pre-push"));
     assert!(stdout.contains("✓"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -171,8 +153,6 @@ fn test_cli_list_with_invalid_hook() {
     assert!(success);
     assert!(stdout.contains("not-a-real-hook"));
     assert!(stdout.contains("⚠") || stdout.contains("not a standard"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -188,8 +168,6 @@ fn test_cli_templates_have_executable_permission() {
         let mode = fs::metadata(&hook).unwrap().permissions().mode();
 
         assert_eq!(mode & 0o111, 0o111, "Hook should be executable");
-
-        let _ = fs::remove_dir_all(&dir);
     }
 }
 
@@ -201,8 +179,6 @@ fn test_cli_add_missing_hook_name() {
 
     assert!(!success);
     assert!(stderr.contains("requires a hook name") || stderr.contains("Usage"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -213,8 +189,6 @@ fn test_cli_unknown_command() {
 
     assert!(!success);
     assert!(stderr.contains("Unknown command"));
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -226,6 +200,4 @@ fn test_cli_pre_push_template() {
     let content = fs::read_to_string(&hook).unwrap();
 
     assert!(content.contains("clippy") || content.contains("checks"));
-
-    let _ = fs::remove_dir_all(&dir);
 }

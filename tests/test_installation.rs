@@ -215,9 +215,6 @@ fn test_install_in_submodule() -> Result<(), Error> {
     )?;
 
     if !result.success {
-        let _ = fs::remove_dir_all(&parent);
-        let _ = fs::remove_dir_all(&bare);
-        let _ = fs::remove_dir_all(&clone);
         return Ok(()); // Skip if submodule fails
     }
 
@@ -231,10 +228,6 @@ fn test_install_in_submodule() -> Result<(), Error> {
     let build = run_command("cargo", &["build"], &sub_path)?;
     assert!(build.success);
 
-    // Cleanup
-    let _ = fs::remove_dir_all(&parent);
-    let _ = fs::remove_dir_all(&bare);
-    let _ = fs::remove_dir_all(&clone);
     Ok(())
 }
 
@@ -287,7 +280,6 @@ husky-rs = {{ path = {:?} }}
     let content = get_hook_content(&ws, "pre-commit")?;
     assert!(content.contains("ws"));
 
-    let _ = fs::remove_dir_all(&ws);
     Ok(())
 }
 
@@ -380,7 +372,6 @@ fn test_install_in_worktree() -> Result<(), Error> {
     )?;
 
     if !result.success {
-        let _ = fs::remove_dir_all(&main_repo);
         return Ok(()); // Skip if worktree not supported
     }
 
@@ -395,12 +386,12 @@ fn test_install_in_worktree() -> Result<(), Error> {
     let build = run_command("cargo", &["build"], &worktree)?;
     assert!(build.success);
 
-    // Cleanup
-    run_command(
+    // Cleanup worktree registration
+    let _ = run_command(
         "git",
         &["worktree", "remove", worktree.to_str().unwrap()],
         &main_repo,
-    )?;
-    let _ = fs::remove_dir_all(&main_repo);
+    );
+
     Ok(())
 }
