@@ -2,29 +2,8 @@
 
 mod common;
 
-use common::create_temp_dir;
-use std::env;
+use common::{create_temp_dir, run_husky};
 use std::fs;
-use std::path::Path;
-use std::process::Command;
-
-// ============================================================================
-// CLI Helper
-// ============================================================================
-
-fn run_husky(args: &[&str], cwd: &Path) -> (String, String, bool) {
-    let output = Command::new(env!("CARGO_BIN_EXE_husky"))
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("Failed to execute husky command");
-
-    (
-        String::from_utf8_lossy(&output.stdout).to_string(),
-        String::from_utf8_lossy(&output.stderr).to_string(),
-        output.status.success(),
-    )
-}
 
 // ============================================================================
 // CLI Tests

@@ -60,6 +60,7 @@ type Result<T> = std::result::Result<T, HuskyError>;
 
 const HUSKY_DIR: &str = ".husky";
 const HUSKY_HOOKS_DIR: &str = "hooks";
+// NOTE: Keep in sync with SUPPORTED_HOOKS in src/lib.rs
 const VALID_HOOK_NAMES: [&str; 27] = [
     "applypatch-msg",
     "pre-applypatch",
@@ -221,14 +222,14 @@ fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
     is_file_type && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
 }
 
-fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
-    let hook_name = src.file_name().unwrap().to_string_lossy();
-    let dst = dst_dir.join(src.file_name().unwrap());
-    let user_script_lines = read_file_lines(src)?;
+fn install_hook(user_hook_path: &Path, git_hooks_dir: &Path) -> Result<()> {
+    let hook_name = user_hook_path.file_name().unwrap().to_string_lossy();
+    let dst = git_hooks_dir.join(user_hook_path.file_name().unwrap());
+    let user_script_lines = read_file_lines(user_hook_path)?;
 
     if user_script_lines.is_empty() {
         eprintln!("cargo:warning=husky-rs: Skipping empty hook: {}", hook_name);
-        return Err(HuskyError::EmptyUserHook(src.to_owned()));
+        return Err(HuskyError::EmptyUserHook(user_hook_path.to_owned()));
     }
 
     let (shebang, actual_script_body, had_shebang) = extract_shebang_and_body(user_script_lines);
@@ -249,13 +250,17 @@ fn install_hook(src: &Path, dst_dir: &Path) -> Result<()> {
 }
 
 // Extracts shebang and body from user script lines.
+// If a valid shebang is found on the first line, it's extracted separately
+// so we can place the husky header between it and the script body.
 // Returns (shebang, body, had_shebang_flag)
 fn extract_shebang_and_body(user_script_lines: Vec<String>) -> (String, Vec<String>, bool) {
     let mut actual_script_body = user_script_lines;
     let mut had_shebang = false;
 
+    // Check first line for a known shebang pattern
     let shebang = if let Some(first_line) = actual_script_body.first() {
         if SHEBANGS.contains(&first_line.trim()) {
+            // Found valid shebang - remove from body (we'll prepend it later)
             had_shebang = true;
             let s = first_line.trim().to_string();
             actual_script_body = actual_script_body.into_iter().skip(1).collect();

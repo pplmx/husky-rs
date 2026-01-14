@@ -90,6 +90,8 @@ pub fn should_skip_installation() -> bool {
 
 /// List of all Git hooks supported by husky-rs.
 ///
+/// NOTE: Keep in sync with `VALID_HOOK_NAMES` in `build.rs`.
+///
 /// This includes all standard Git hooks as documented in the
 /// [Git documentation](https://git-scm.com/docs/githooks).
 pub const SUPPORTED_HOOKS: &[&str] = &[

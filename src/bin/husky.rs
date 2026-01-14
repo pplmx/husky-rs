@@ -102,12 +102,14 @@ fn add_hook(hook_name: &str) -> io::Result<()> {
         eprintln!("Warning: '{}' is not a standard Git hook name", hook_name);
         eprintln!();
         eprintln!("Standard hooks include:");
+        const HOOKS_PER_ROW: usize = 3;
+        const HOOK_DISPLAY_WIDTH: usize = 25;
         for (i, hook) in husky_rs::SUPPORTED_HOOKS.iter().enumerate() {
-            if i % 3 == 0 {
+            if i % HOOKS_PER_ROW == 0 {
                 print!("  ");
             }
-            print!("{:<25}", hook);
-            if (i + 1) % 3 == 0 {
+            print!("{:<width$}", hook, width = HOOK_DISPLAY_WIDTH);
+            if (i + 1) % HOOKS_PER_ROW == 0 {
                 println!();
             }
         }

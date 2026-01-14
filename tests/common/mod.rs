@@ -455,3 +455,23 @@ pub fn validate_shell_syntax(script: &str) -> Result<(), String> {
 pub fn validate_shell_syntax(_script: &str) -> Result<(), String> {
     Ok(())
 }
+
+// ============================================================================
+// CLI Testing
+// ============================================================================
+
+/// Run the husky CLI binary with the given arguments.
+/// Returns (stdout, stderr, success).
+pub fn run_husky(args: &[&str], cwd: &Path) -> (String, String, bool) {
+    let output = Command::new(env!("CARGO_BIN_EXE_husky"))
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .expect("Failed to execute husky command");
+
+    (
+        String::from_utf8_lossy(&output.stdout).to_string(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+        output.status.success(),
+    )
+}
