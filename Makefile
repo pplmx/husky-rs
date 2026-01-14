@@ -1,4 +1,4 @@
-.PHONY: help build test fmt fmt-check clippy fix doc doc-check clean ci coverage
+.PHONY: help build test fmt fmt-check clippy fix doc doc-check clean ci coverage msrv-check
 
 .DEFAULT_GOAL := help
 
@@ -31,7 +31,11 @@ doc-check:
 	@RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
 
 # Run all CI checks locally
-ci: fmt-check clippy doc-check test
+ci: fmt-check clippy doc-check msrv-check test
+
+# Check Minimum Supported Rust Version (MSRV)
+msrv-check:
+	@cargo msrv verify
 
 # Auto-fix clippy warnings and format
 fix:

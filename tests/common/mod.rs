@@ -169,15 +169,12 @@ pub fn run_command_success(cmd: &str, args: &[&str], cwd: &Path) -> Result<(), E
     if output.success {
         Ok(())
     } else {
-        Err(Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "Command `{} {}` failed: {}",
-                cmd,
-                args.join(" "),
-                output.stderr
-            ),
-        ))
+        Err(Error::other(format!(
+            "Command `{} {}` failed: {}",
+            cmd,
+            args.join(" "),
+            output.stderr
+        )))
     }
 }
 
@@ -359,10 +356,10 @@ impl TestProject {
         if output.success {
             Ok(())
         } else {
-            Err(Error::new(
-                std::io::ErrorKind::Other,
-                format!("cargo build failed: {}", output.stderr),
-            ))
+            Err(Error::other(format!(
+                "cargo build failed: {}",
+                output.stderr
+            )))
         }
     }
 
@@ -372,10 +369,10 @@ impl TestProject {
         if output.success {
             Ok(())
         } else {
-            Err(Error::new(
-                std::io::ErrorKind::Other,
-                format!("cargo test failed: {}", output.stderr),
-            ))
+            Err(Error::other(format!(
+                "cargo test failed: {}",
+                output.stderr
+            )))
         }
     }
 
