@@ -9,8 +9,17 @@ This skill ensures that project history is clean, readable, and machine-parseabl
 
 ## Format Structure
 
-Messages must match the regex:
-`^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9-]+\))?!?: .+$`
+Messages should follow this structure:
+
+```text
+<type>(<scope>): <subject>
+<空行>
+[body]
+<空行>
+[footer]
+```
+
+**Subject Regex**: `^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9-]+\))?!?: .+$`
 
 ## Types
 
@@ -26,13 +35,32 @@ Messages must match the regex:
 - **chore**: Other changes that don't modify src or test files.
 - **revert**: Reverts a previous commit.
 
-## Breaking Changes
+## Extended Content Guidelines
 
-- Append `!` after the type/scope (e.g., `feat(api)!: change user id to string`) OR include `BREAKING CHANGE:` in the footer.
-- This correlates to MAJOR in SemVer.
+### 1. Body (Optional)
+
+The body provides a place to explain the **why** and **how** of the change. Use it for:
+
+- Explaining the motivation for the change.
+- Describing the technical approach or trade-offs.
+- Listing multiple related changes in a single commit.
+
+**Rules for Body**:
+
+- Separate from the subject with a blank line.
+- Use a blank line between paragraphs.
+- Keep lines wrapped at ~72 characters for readability in CLI tools.
+
+### 2. Footer (Optional)
+
+The footer is used for metadata and tracking.
+
+- **Breaking Changes**: Must start with `BREAKING CHANGE:` followed by a description.
+- **Issue Tracking**: Reference issues (e.g., `Fixes #123`, `Closes #456`).
 
 ## Rules
 
-1. **Imperative Mood**: "add feature" not "added feature".
+1. **Imperative Mood**: Use "add feature" instead of "added feature" in the subject.
 2. **No Period**: Do not end the subject line with a period.
-3. **Lowercase**: Keep the subject lowercase (unless proper nouns).
+3. **Lowercase Subject**: Keep the subject line lowercase (except for proper nouns).
+4. **Separation**: Always use blank lines between Subject, Body, and Footer.
