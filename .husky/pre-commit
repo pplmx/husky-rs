@@ -1,0 +1,63 @@
+#!/bin/sh
+[ "$HUSKY" = "0" ] && exit 0
+
+# husky-rs pre-commit hook
+
+# Source helpers
+. "$(dirname "$0")/_helpers.sh"
+
+print_header "🔍" "Pre-Commit Checks"
+
+START_TIME=$(date +%s)
+
+if git diff --cached --quiet; then
+    print_warning "No staged changes to commit"
+    exit 0
+fi
+
+run_check \
+    "🔧 Checking code formatting..." \
+    "cargo fmt --all -- --check" \
+    "Code is not formatted" \
+    "cargo fmt --all" \
+|| exit 1
+
+run_check \
+    "🔍 Running Clippy linter..." \
+    "cargo clippy --workspace --all-targets --all-features -- -D warnings" \
+    "Clippy found issues" \
+    "cargo clippy --fix --workspace --all-targets --all-features --allow-dirty --allow-staged" \
+|| exit 1
+
+run_check \
+    "📦 Checking compilation..." \
+    "cargo check --workspace --all-targets --all-features" \
+    "Compilation failed" \
+    "cargo fix --workspace --all-targets --all-features --allow-dirty --allow-staged" \
+|| exit 1
+
+run_check \
+    "🧪 Running unit tests..." \
+    "cargo test --lib --workspace --quiet" \
+    "Unit tests failed" \
+    "cargo test --lib --workspace" \
+|| exit 1
+
+if [ -f Cargo.lock ]; then
+    run_check \
+        "🔐 Verifying Cargo.lock is up-to-date..." \
+        "cargo metadata --format-version 1 > /dev/null 2>&1" \
+        "Cargo.lock is out of sync" \
+        "cargo update" \
+    || exit 1
+fi
+
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+
+echo ""
+echo "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo "${GREEN}  ✓ All pre-commit checks passed!${NC}"
+echo "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+print_info "Completed in ${CYAN}${ELAPSED}s${NC}"
+echo ""

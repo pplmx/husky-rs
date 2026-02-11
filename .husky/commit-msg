@@ -1,0 +1,76 @@
+#!/bin/sh
+[ "$HUSKY" = "0" ] && exit 0
+
+# husky-rs commit-msg hook
+
+# Source helpers
+. "$(dirname "$0")/_helpers.sh"
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file")
+first_line=$(echo "$commit_msg" | head -n 1)
+
+print_header "📝" "Commit Message Validation"
+
+if [ -z "$first_line" ]; then
+    print_error "Commit message is empty"
+    exit 1
+fi
+
+MIN_LENGTH=10
+if [ ${#first_line} -lt $MIN_LENGTH ]; then
+    echo ""
+    print_error "Commit subject too short (${#first_line} chars, minimum $MIN_LENGTH)"
+    print_info "Current: ${YELLOW}$first_line${NC}"
+    echo ""
+    exit 1
+fi
+
+MAX_LENGTH=72
+if [ ${#first_line} -gt $MAX_LENGTH ]; then
+    echo ""
+    print_warning "Commit subject exceeds $MAX_LENGTH characters (${#first_line} chars)"
+    print_info "Consider shortening for better readability"
+fi
+
+CONVENTIONAL_REGEX="^(feat|fix|docs|style|refactor|test|chore|ci|perf|revert|build)(\(.+\))?: .+"
+
+if ! echo "$first_line" | grep -qE "$CONVENTIONAL_REGEX"; then
+    echo ""
+    print_error "Commit message must follow Conventional Commits format"
+    echo ""
+    print_info "Format: ${CYAN}<type>${NC}${YELLOW}(scope)${NC}: ${GREEN}<subject>${NC}"
+    echo ""
+    echo "  ${CYAN}Available Types:${NC}"
+    echo "    ${YELLOW}feat${NC}     │ New feature"
+    echo "    ${YELLOW}fix${NC}      │ Bug fix"
+    echo "    ${YELLOW}docs${NC}     │ Documentation"
+    echo "    ${YELLOW}style${NC}    │ Style"
+    echo "    ${YELLOW}refactor${NC} │ Refactor"
+    echo "    ${YELLOW}test${NC}     │ Test"
+    echo "    ${YELLOW}chore${NC}    │ Chore"
+    echo "    ${YELLOW}perf${NC}     │ Performance"
+    echo "    ${YELLOW}ci${NC}       │ CI"
+    echo "    ${YELLOW}build${NC}    │ Build"
+    echo "    ${YELLOW}revert${NC}   │ Revert"
+    echo ""
+    print_info "Your message: ${RED}$first_line${NC}"
+    echo ""
+    exit 1
+fi
+
+subject=$(echo "$first_line" | sed -E 's/^[a-z]+(\([^)]+\))?: //')
+first_char=$(echo "$subject" | cut -c1)
+if echo "$first_char" | grep -q '[A-Z]'; then
+    echo ""
+    print_warning "Subject should start with lowercase letter"
+fi
+
+if echo "$first_line" | grep -q '\.$'; then
+    echo ""
+    print_warning "Subject should not end with a period"
+fi
+
+echo ""
+print_success "Commit message is valid!"
+echo ""

@@ -148,7 +148,6 @@ fn install_hooks() -> Result<()> {
         }
     }
 
-    println!("cargo:warning=husky-rs: Configured core.hooksPath to .husky");
     Ok(())
 }
 

@@ -1,0 +1,54 @@
+#!/bin/sh
+[ "$HUSKY" = "0" ] && exit 0
+
+# husky-rs pre-push hook
+
+# Source helpers
+. "$(dirname "$0")/_helpers.sh"
+
+print_header "🚀" "Pre-Push Verification"
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+print_info "Branch: ${CYAN}$BRANCH${NC}"
+echo ""
+
+START_TIME=$(date +%s)
+
+run_check \
+    "🧪 Running complete test suite..." \
+    "cargo test --workspace --all-features" \
+    "Tests failed" \
+    "cargo test --workspace --all-features" \
+|| exit 1
+
+run_check \
+    "📦 Verifying release build..." \
+    "cargo build --release --workspace --all-features --quiet" \
+    "Release build failed" \
+    "Check the build errors and fix them" \
+|| exit 1
+
+run_check \
+    "📚 Checking documentation..." \
+    "cargo doc --workspace --all-features --no-deps --quiet" \
+    "Documentation check failed" \
+    "cargo doc --workspace --all-features" \
+    "true"
+
+if command -v cargo-audit > /dev/null 2>&1; then
+    run_check \
+        "🔒 Auditing dependencies for vulnerabilities..." \
+        "cargo audit" \
+        "Vulnerabilities detected" \
+        "cargo audit" \
+        "true"
+fi
+
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
+
+echo "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo "${GREEN}  ✓ All checks passed! Ready to push 🚀${NC}"
+echo "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+print_info "Total time: ${CYAN}${ELAPSED}s${NC}"
+echo ""

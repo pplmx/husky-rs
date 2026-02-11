@@ -18,5 +18,8 @@ build = "build.rs"
 name = "husky"
 path = "src/bin/husky.rs"
 
+[dev-dependencies]
+husky-rs = { path = "." }
+
 [features]
 default = []
