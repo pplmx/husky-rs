@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-02-11
+
+### Some minor fixes and improvements
+
+- Just linting and clippy updates, no major changes since 0.3.0
+
 ## [0.3.0] - 2026-02-11
 
 ### 🎯 Highlights
