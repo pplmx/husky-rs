@@ -103,16 +103,32 @@ fn install_hooks() -> Result<()> {
         return Ok(());
     }
 
-    // Set core.hooksPath to .husky
-    let status = Command::new("git")
-        .args(["config", "core.hooksPath", ".husky"])
+    let current_hooks_path = Command::new("git")
+        .args(["config", "core.hooksPath"])
         .current_dir(project_root)
-        .status()?;
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
 
-    if !status.success() {
-        return Err(HuskyError::GitConfigFailed(
-            "git config core.hooksPath .husky failed".to_string(),
-        ));
+    if current_hooks_path != ".husky" {
+        let status = Command::new("git")
+            .args(["config", "core.hooksPath", ".husky"])
+            .current_dir(project_root)
+            .status()
+            .map_err(|e| {
+                if e.kind() == io::ErrorKind::NotFound {
+                    HuskyError::GitConfigFailed("git command not found".to_string())
+                } else {
+                    HuskyError::Io(e)
+                }
+            })?;
+
+        if !status.success() {
+            return Err(HuskyError::GitConfigFailed(
+                "git config core.hooksPath .husky failed".to_string(),
+            ));
+        }
+        println!("cargo:warning=husky-rs: Configured core.hooksPath to .husky");
     }
 
     // Ensure all files in .husky are executable on Unix

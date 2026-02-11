@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{create_temp_dir, run_husky};
+use common::{create_temp_dir, run_command, run_command_success, run_husky};
 use std::fs;
 
 // ============================================================================
@@ -178,4 +178,27 @@ fn test_cli_pre_push_template() {
     let content = fs::read_to_string(&hook).unwrap();
 
     assert!(content.contains("clippy") || content.contains("checks"));
+}
+
+#[test]
+fn test_cli_uninstall() {
+    let dir = create_temp_dir("husky-cli-uninstall-").unwrap();
+
+    run_command_success("git", &["init"], &dir).unwrap();
+
+    run_command_success("git", &["config", "core.hooksPath", ".husky"], &dir).unwrap();
+    assert_eq!(
+        run_command("git", &["config", "core.hooksPath"], &dir)
+            .unwrap()
+            .stdout
+            .trim(),
+        ".husky"
+    );
+
+    let (stdout, _, success) = run_husky(&["uninstall"], &dir);
+    assert!(success);
+    assert!(stdout.contains("Unset core.hooksPath"));
+
+    let output = run_command("git", &["config", "core.hooksPath"], &dir).unwrap();
+    assert!(!output.success);
 }

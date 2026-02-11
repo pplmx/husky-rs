@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-02-11
+
+### 🎯 Highlights
+
+> This release marks a significant architectural shift to the **Modern Husky approach**, using Git's native `core.hooksPath` configuration for better performance, flexibility, and support for auxiliary scripts.
+
+### ⚠️ Breaking Changes
+
+- **Hook Location**: Hooks are now stored directly in `.husky/` instead of `.husky/hooks/`.
+- **Mechanism Shift**: Switched from copying/wrapping hooks to using `git config core.hooksPath .husky`.
+- **Directory Structure**: The `.husky/hooks/` subdirectory is no longer used; move your hooks to `.husky/`.
+- **CLI Feature**: The `cli` feature has been removed. The `husky` binary is now included by default without extra configuration.
+
+### ✨ New Features
+
+- **Helper Script Support**: Arbitrary files (like `_helpers.sh`) can now be stored in `.husky/` and sourced from hooks.
+- **Runtime Control**: Support for `HUSKY=0` environment variable to skip hooks at runtime (e.g., `HUSKY=0 git commit`).
+- **Runtime Helper**: Added `.husky/_/husky.sh` which can be sourced by hooks for standardized behavior.
+- **CLI Enhancements**:
+    - `husky init`: Now configures `core.hooksPath` immediately and creates the `_/husky.sh` helper.
+    - `husky uninstall`: New command to unset `core.hooksPath`.
+    - `husky add`: Templates updated to include `_/husky.sh` sourcing example.
+
+### 🚀 Performance & Robustness
+
+- **Incremental Builds**: `build.rs` now checks `core.hooksPath` before calling `git config`, speeding up builds.
+- **Graceful Degradation**: Better handling of environments without `git` command or outside git repositories.
+
+---
+
 ## [0.2.2] - 2026-01-09
 
 ### 🧪 Testing
@@ -68,11 +98,11 @@ All notable changes to this project will be documented in this file.
 
 #### Optional CLI Tool
 
-> Install with: `cargo install husky-rs`
+> Install with: `cargo install husky-rs --features=cli`
 
 | Command | Description |
 | --------- | ------------- |
-| `husky init` | Create `.husky` directory |
+| `husky init` | Create `.husky/hooks` directory |
 | `husky add <hook>` | Create hook from smart template |
 | `husky list` | List installed hooks with status |
 | `husky help` | Show help message |
@@ -208,6 +238,7 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ---
 
+[0.3.0]: https://github.com/pplmx/husky-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/pplmx/husky-rs/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/pplmx/husky-rs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/pplmx/husky-rs/compare/v0.1.5...v0.2.0
