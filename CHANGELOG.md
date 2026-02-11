@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.2] - 2026-02-11
 
+### 🚀 Improvements & Refinements
+
+- **Lean Implementation**: Removed `.husky/_/husky.sh` in favor of direct skip logic in hook templates, keeping the `.husky/` directory clean.
+- **Improved templates**: `husky add` now generates hooks with `[ "$HUSKY" = "0" ] && exit 0` for explicit and transparent skip logic.
+- **Robustness**: Enhanced `build.rs` and `husky init` to gracefully handle environments without Git or outside a Git repository.
+- **Incremental efficiency**: `build.rs` now skips redundant `git config` calls if `core.hooksPath` is already correctly set.
+
+## [0.3.1] - 2026-02-11
+
+### 🔧 Maintenance
+
+- **Clippy Fixes**: Resolved various `needless_borrows_for_generic_args` warnings in the CLI tool.
+- **Code Quality**: Cleaned up internal CLI logic and improved error feedback for manual configuration steps.
+
+## [0.3.0] - 2026-02-11
+
 ### 🎯 Highlights
 
 > This release marks a significant architectural shift to the **Modern Husky approach**, using Git's native `core.hooksPath` configuration for better performance, flexibility, and support for auxiliary scripts.
@@ -22,13 +38,6 @@ All notable changes to this project will be documented in this file.
 - **CLI Enhancements**:
     - `husky init`: Now configures `core.hooksPath` immediately.
     - `husky uninstall`: New command to unset `core.hooksPath`.
-    - `husky add`: Templates updated to include `HUSKY=0` skip logic by default.
-
-### 🚀 Performance & Robustness
-
-- **Incremental Builds**: `build.rs` now checks `core.hooksPath` before calling `git config`, speeding up builds.
-- **Graceful Degradation**: Better handling of environments without `git` command or outside git repositories.
-- **Lean Implementation**: Removed `_/husky.sh` in favor of direct skip logic in hook templates for a cleaner directory structure.
 
 ---
 
@@ -238,7 +247,9 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ---
 
-[0.3.2]: https://github.com/pplmx/husky-rs/compare/v0.2.2...v0.3.2
+[0.3.2]: https://github.com/pplmx/husky-rs/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/pplmx/husky-rs/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/pplmx/husky-rs/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/pplmx/husky-rs/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/pplmx/husky-rs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/pplmx/husky-rs/compare/v0.1.5...v0.2.0
