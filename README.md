@@ -11,9 +11,8 @@
 ## Features
 
 - 🚀 **Zero-configuration** - Just add the dependency and create hooks
-- ⚡ **Automatic installation** - Hooks install on `cargo build` or `cargo test`
+- ⚡ **Automatic installation** - Hooks configure on `cargo build` or `cargo test`
 - 🔄 **Smart rerun detection** - No need for `cargo clean` when updating hooks
-- ✅ **Comprehensive validation** - Warns about empty hooks and missing shebangs
 - 🎯 **All 27 Git hooks supported** - Client-side and server-side hooks
 - 🌍 **Cross-platform** - Works on Unix-like systems and Windows
 - 🛠️ **Optional CLI tool** - `husky init`, `husky add`, `husky list` commands
@@ -40,13 +39,13 @@
 2. Create hooks directory:
 
    ```sh
-   mkdir -p .husky/hooks
+   mkdir -p .husky
    ```
 
 3. Add a hook (e.g., `pre-commit`):
 
    ```sh
-   echo '#!/bin/sh\necho "Running pre-commit hook"' > .husky/hooks/pre-commit
+   echo '#!/bin/sh\necho "Running pre-commit hook"' > .husky/pre-commit
    ```
 
 4. Install hooks:
@@ -67,14 +66,7 @@
 
 ### Supported Git Hooks
 
-`husky-rs` supports all 27 Git hooks, including:
-
-- `pre-commit` - Run before commit is created
-- `prepare-commit-msg` - Edit commit message before committing
-- `commit-msg` - Validate commit message format
-- `post-commit` - Run after commit is created
-- `pre-push` - Run before pushing to remote
-- And 22 more...
+`husky-rs` supports all standard Git hooks by setting `core.hooksPath` to `.husky`. This means you can also place helper scripts (e.g., `.husky/_helpers.sh`) in the same directory and source them from your hooks.
 
 For a complete list, refer to the [Git documentation](https://git-scm.com/docs/githooks).
 
@@ -97,13 +89,13 @@ You can also set this in your environment or CI configuration.
 For added convenience, install the `husky` command-line tool:
 
 ```sh
-cargo install husky-rs --features=cli
+cargo install husky-rs
 ```
 
 The CLI provides helpful commands:
 
 ```sh
-husky init              # Create .husky/hooks directory
+husky init              # Create .husky directory
 husky add pre-commit    # Add hook from smart template
 husky list              # List all installed hooks
 husky help              # Show help

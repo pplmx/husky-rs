@@ -234,9 +234,9 @@ pub fn add_husky_dependency_with_options(
 // Hook Utilities
 // ============================================================================
 
-/// Create a hook file in the .husky/hooks directory.
+/// Create a hook file in the .husky directory.
 pub fn create_hook(project_path: &Path, hook_name: &str, content: &str) -> Result<(), Error> {
-    let hooks_dir = project_path.join(".husky").join("hooks");
+    let hooks_dir = project_path.join(".husky");
     fs::create_dir_all(&hooks_dir)?;
     fs::write(hooks_dir.join(hook_name), content)
 }
@@ -249,28 +249,29 @@ pub fn create_default_hooks(project_path: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-/// Check if a hook is installed in .git/hooks.
+/// Check if a hook is installed in .husky and core.hooksPath is set.
 pub fn verify_hook_installed(project_path: &Path, hook_name: &str) -> bool {
-    project_path
-        .join(".git")
-        .join("hooks")
-        .join(hook_name)
-        .exists()
+    // Check if the file exists in .husky
+    if !project_path.join(".husky").join(hook_name).exists() {
+        return false;
+    }
+
+    // Check if git config core.hooksPath is set to .husky
+    let output = run_command("git", &["config", "core.hooksPath"], project_path).unwrap();
+    output.success && output.stdout.trim() == ".husky"
 }
 
-/// Get the content of an installed hook.
+/// Get the content of a hook from .husky.
 pub fn get_hook_content(project_path: &Path, hook_name: &str) -> Result<String, Error> {
-    fs::read_to_string(project_path.join(".git").join("hooks").join(hook_name))
+    fs::read_to_string(project_path.join(".husky").join(hook_name))
 }
 
 /// Assert that a hook is installed.
 pub fn assert_hook_installed(project_path: &Path, hook_name: &str) {
-    let hook_path = project_path.join(".git").join("hooks").join(hook_name);
     assert!(
-        hook_path.exists(),
-        "Hook '{}' should be installed at {}",
-        hook_name,
-        hook_path.display()
+        verify_hook_installed(project_path, hook_name),
+        "Hook '{}' should be installed and core.hooksPath should be set",
+        hook_name
     );
 }
 
@@ -387,7 +388,6 @@ impl TestProject {
             let installed = verify_hook_installed(&self.path, hook);
             if expect_installed {
                 assert!(installed, "Hook {} should be installed", hook);
-                assert_hook_contains(&self.path, hook, "husky-rs");
             } else {
                 let content = get_hook_content(&self.path, hook).unwrap_or_default();
                 assert!(

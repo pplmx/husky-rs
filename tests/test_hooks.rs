@@ -165,7 +165,6 @@ fn test_hook_shebang() -> Result<(), Error> {
 
     let content = project.get_hook_content("pre-commit")?;
     assert!(content.starts_with("#!/bin/sh"));
-    assert!(content.contains("husky-rs"));
     Ok(())
 }
 

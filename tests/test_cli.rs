@@ -32,7 +32,7 @@ fn test_cli_version() {
 #[test]
 fn test_cli_init_creates_directory() {
     let dir = create_temp_dir("husky-cli-init-").unwrap();
-    let hooks_dir = dir.join(".husky").join("hooks");
+    let hooks_dir = dir.join(".husky");
 
     assert!(!hooks_dir.exists());
 
@@ -40,13 +40,13 @@ fn test_cli_init_creates_directory() {
 
     assert!(success);
     assert!(hooks_dir.exists() && hooks_dir.is_dir());
-    assert!(stdout.contains("Created .husky/hooks"));
+    assert!(stdout.contains("Created .husky directory"));
 }
 
 #[test]
 fn test_cli_init_already_exists() {
     let dir = create_temp_dir("husky-cli-init-exists-").unwrap();
-    let hooks_dir = dir.join(".husky").join("hooks");
+    let hooks_dir = dir.join(".husky");
     fs::create_dir_all(&hooks_dir).unwrap();
 
     let (stdout, _, success) = run_husky(&["init"], &dir);
@@ -58,7 +58,7 @@ fn test_cli_init_already_exists() {
 #[test]
 fn test_cli_add_pre_commit() {
     let dir = create_temp_dir("husky-cli-add-").unwrap();
-    let hook_file = dir.join(".husky").join("hooks").join("pre-commit");
+    let hook_file = dir.join(".husky").join("pre-commit");
 
     let (stdout, _, success) = run_husky(&["add", "pre-commit"], &dir);
 
@@ -67,14 +67,13 @@ fn test_cli_add_pre_commit() {
 
     let content = fs::read_to_string(&hook_file).unwrap();
     assert!(content.starts_with("#!/bin/sh"));
-    assert!(content.contains("husky-rs"));
     assert!(stdout.contains("Created hook: pre-commit"));
 }
 
 #[test]
 fn test_cli_add_commit_msg() {
     let dir = create_temp_dir("husky-cli-add-msg-").unwrap();
-    let hook_file = dir.join(".husky").join("hooks").join("commit-msg");
+    let hook_file = dir.join(".husky").join("commit-msg");
 
     run_husky(&["add", "commit-msg"], &dir);
 
@@ -122,7 +121,7 @@ fn test_cli_list_with_hooks() {
 #[test]
 fn test_cli_list_with_invalid_hook() {
     let dir = create_temp_dir("husky-cli-list-invalid-").unwrap();
-    let hooks_dir = dir.join(".husky").join("hooks");
+    let hooks_dir = dir.join(".husky");
     fs::create_dir_all(&hooks_dir).unwrap();
     fs::write(hooks_dir.join("not-a-real-hook"), "#!/bin/sh\necho test").unwrap();
     run_husky(&["add", "pre-commit"], &dir);
@@ -143,7 +142,7 @@ fn test_cli_templates_have_executable_permission() {
         let dir = create_temp_dir("husky-cli-perms-").unwrap();
         run_husky(&["add", "pre-commit"], &dir);
 
-        let hook = dir.join(".husky").join("hooks").join("pre-commit");
+        let hook = dir.join(".husky").join("pre-commit");
         let mode = fs::metadata(&hook).unwrap().permissions().mode();
 
         assert_eq!(mode & 0o111, 0o111, "Hook should be executable");
@@ -175,7 +174,7 @@ fn test_cli_pre_push_template() {
     let dir = create_temp_dir("husky-cli-prepush-").unwrap();
     run_husky(&["add", "pre-push"], &dir);
 
-    let hook = dir.join(".husky").join("hooks").join("pre-push");
+    let hook = dir.join(".husky").join("pre-push");
     let content = fs::read_to_string(&hook).unwrap();
 
     assert!(content.contains("clippy") || content.contains("checks"));

@@ -30,6 +30,7 @@ fn main() {
             add_hook(&args[2])
         }
         "list" => list_hooks(),
+        "uninstall" => uninstall_husky(),
         "version" | "-v" | "--version" => {
             println!("husky-rs v{}", VERSION);
             Ok(())
@@ -59,9 +60,10 @@ fn print_help() {
     println!("    husky <COMMAND>");
     println!();
     println!("COMMANDS:");
-    println!("    init              Create .husky/hooks directory");
+    println!("    init              Create .husky directory");
     println!("    add <hook-name>   Create a new hook from template");
-    println!("    list              List all hooks in .husky/hooks");
+    println!("    list              List all hooks in .husky");
+    println!("    uninstall         Unset core.hooksPath");
     println!("    help              Print this help message");
     println!("    version           Print version information");
     println!();
@@ -75,15 +77,15 @@ fn print_help() {
 }
 
 fn init_husky() -> io::Result<()> {
-    let hooks_dir = Path::new(".husky").join("hooks");
+    let hooks_dir = Path::new(".husky");
 
     if hooks_dir.exists() {
-        println!("✓ .husky/hooks already exists");
+        println!("✓ .husky already exists");
         return Ok(());
     }
 
     fs::create_dir_all(&hooks_dir)?;
-    println!("✓ Created .husky/hooks directory");
+    println!("✓ Created .husky directory");
     println!();
     println!("Next steps:");
     println!("  1. Add husky-rs to your Cargo.toml:");
@@ -125,10 +127,10 @@ fn add_hook(hook_name: &str) -> io::Result<()> {
         }
     }
 
-    let hooks_dir = Path::new(".husky").join("hooks");
+    let hooks_dir = Path::new(".husky");
     if !hooks_dir.exists() {
         fs::create_dir_all(&hooks_dir)?;
-        println!("✓ Created .husky/hooks directory");
+        println!("✓ Created .husky directory");
     }
 
     let hook_path = hooks_dir.join(hook_name);
@@ -161,10 +163,10 @@ fn add_hook(hook_name: &str) -> io::Result<()> {
 }
 
 fn list_hooks() -> io::Result<()> {
-    let hooks_dir = Path::new(".husky").join("hooks");
+    let hooks_dir = Path::new(".husky");
 
     if !hooks_dir.exists() {
-        println!("No hooks directory found.");
+        println!("No .husky directory found.");
         println!("Run 'husky init' to create it.");
         return Ok(());
     }
@@ -175,12 +177,12 @@ fn list_hooks() -> io::Result<()> {
         .collect();
 
     if entries.is_empty() {
-        println!("No hooks found in .husky/hooks/");
+        println!("No hooks found in .husky/");
         println!("Run 'husky add <hook-name>' to create one.");
         return Ok(());
     }
 
-    println!("Hooks in .husky/hooks/:");
+    println!("Hooks in .husky/:");
     for entry in entries {
         let name = entry.file_name();
 
@@ -192,6 +194,20 @@ fn list_hooks() -> io::Result<()> {
         if !is_valid {
             println!("     (not a standard Git hook name)");
         }
+    }
+
+    Ok(())
+}
+
+fn uninstall_husky() -> io::Result<()> {
+    let status = process::Command::new("git")
+        .args(["config", "--unset", "core.hooksPath"])
+        .status()?;
+
+    if status.success() {
+        println!("✓ Unset core.hooksPath");
+    } else {
+        println!("i core.hooksPath was not set or failed to unset");
     }
 
     Ok(())

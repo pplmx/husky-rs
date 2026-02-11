@@ -1,28 +1,28 @@
 //! Build script for husky-rs
 //!
-//! This build script automatically installs Git hooks from `.husky/hooks/` to `.git/hooks/`
-//! during the build process.
+//! This build script automatically configures Git to use hooks from `.husky/`
+//! by setting `core.hooksPath`.
 //!
 //! ## How it works
 //!
 //! 1. Checks for the `NO_HUSKY_HOOKS` environment variable to skip installation
-//! 2. Locates the `.git` directory (supports both regular repos and submodules)
-//! 3. Reads all hook files from `.husky/hooks/`
-//! 4. Validates each hook (checks for empty files, missing shebangs)
-//! 5. Wraps user hooks with husky-rs header and installs to `.git/hooks/`
-//! 6. Sets executable permissions (Unix-like systems)
+//! 2. Locates the `.git` directory
+//! 3. Checks if `.husky/` exists
+//! 4. Sets `git config core.hooksPath .husky`
+//! 5. Ensures files in `.husky/` are executable (Unix-like systems)
 
 use std::env;
-use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug)]
 enum HuskyError {
     GitDirNotFound(String),
     Io(io::Error),
     Env(env::VarError),
-    EmptyUserHook(PathBuf),
+    GitConfigFailed(String),
 }
 
 impl std::fmt::Display for HuskyError {
@@ -35,9 +35,7 @@ impl std::fmt::Display for HuskyError {
             ),
             HuskyError::Io(err) => write!(f, "IO error: {}", err),
             HuskyError::Env(err) => write!(f, "Environment variable error: {}", err),
-            HuskyError::EmptyUserHook(path) => {
-                write!(f, "User hook script is empty: '{}'", path.display())
-            }
+            HuskyError::GitConfigFailed(err) => write!(f, "Git config failed: {}", err),
         }
     }
 }
@@ -59,71 +57,25 @@ impl From<env::VarError> for HuskyError {
 type Result<T> = std::result::Result<T, HuskyError>;
 
 const HUSKY_DIR: &str = ".husky";
-const HUSKY_HOOKS_DIR: &str = "hooks";
-// NOTE: Keep in sync with SUPPORTED_HOOKS in src/lib.rs
-const VALID_HOOK_NAMES: [&str; 27] = [
-    "applypatch-msg",
-    "pre-applypatch",
-    "post-applypatch",
-    "pre-commit",
-    "pre-merge-commit",
-    "prepare-commit-msg",
-    "commit-msg",
-    "post-commit",
-    "pre-rebase",
-    "post-checkout",
-    "post-merge",
-    "pre-push",
-    "pre-receive",
-    "update",
-    "proc-receive",
-    "post-receive",
-    "post-update",
-    "reference-transaction",
-    "pre-auto-gc",
-    "post-rewrite",
-    "sendemail-validate",
-    "fsmonitor-watchman",
-    "p4-changelist",
-    "p4-prepare-changelist",
-    "p4-post-changelist",
-    "p4-pre-submit",
-    "post-index-change",
-];
-const HUSKY_HEADER: &str = "This hook was set by husky-rs";
-const SHEBANGS: [&str; 8] = [
-    "#!/bin/sh",
-    "#!/usr/bin/env sh",
-    "#!/usr/bin/env bash",
-    "#!/usr/bin/env python",
-    "#!/usr/bin/env python3",
-    "#!/usr/bin/env ruby",
-    "#!/usr/bin/env node",
-    "#!/usr/bin/env perl",
-];
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-env-changed=NO_HUSKY_HOOKS");
-
-    // Monitor the .husky/hooks directory itself
-    println!("cargo:rerun-if-changed=.husky/hooks");
+    println!("cargo:rerun-if-changed=.husky");
 
     if env::var_os("NO_HUSKY_HOOKS").is_some() {
         return Ok(());
     }
 
     install_hooks().or_else(|error| {
-        // Provide helpful error messages based on error type
         match &error {
             HuskyError::GitDirNotFound(path) => {
                 eprintln!(
                     "husky-rs: Unable to find .git directory starting from: {}",
                     path
                 );
-                eprintln!("husky-rs: This is normal if you're not in a Git repository.");
             }
-            HuskyError::EmptyUserHook(path) => {
-                eprintln!("husky-rs: Skipped empty hook file: {}", path.display());
+            HuskyError::GitConfigFailed(e) => {
+                eprintln!("husky-rs: Failed to set git config: {}", e);
             }
             HuskyError::Io(e) => {
                 eprintln!("husky-rs: I/O error during hook installation: {}", e);
@@ -133,7 +85,7 @@ fn main() -> Result<()> {
             }
         }
 
-        // Only tolerate GitDirNotFound (not in a git repo is OK)
+        // Only tolerate GitDirNotFound
         matches!(error, HuskyError::GitDirNotFound(_))
             .then_some(())
             .ok_or(error)
@@ -145,38 +97,42 @@ fn install_hooks() -> Result<()> {
     let project_root = git_dir
         .parent()
         .ok_or_else(|| HuskyError::GitDirNotFound(git_dir.display().to_string()))?;
-    let user_hooks_dir = project_root.join(HUSKY_DIR).join(HUSKY_HOOKS_DIR);
-    let git_hooks_dir = git_dir.join("hooks");
+    let user_hooks_dir = project_root.join(HUSKY_DIR);
 
     if !user_hooks_dir.exists() {
         return Ok(());
     }
 
-    fs::create_dir_all(&git_hooks_dir)?;
+    // Set core.hooksPath to .husky
+    let status = Command::new("git")
+        .args(["config", "core.hooksPath", ".husky"])
+        .current_dir(project_root)
+        .status()?;
 
-    let mut installed_count = 0;
-    for entry_result in fs::read_dir(&user_hooks_dir)? {
-        let entry = entry_result?;
-        let user_hook_path = entry.path();
+    if !status.success() {
+        return Err(HuskyError::GitConfigFailed(
+            "git config core.hooksPath .husky failed".to_string(),
+        ));
+    }
 
-        // Tell cargo to re-run the build script if this hook file changes
-        if let Some(path_str) = user_hook_path.to_str() {
-            println!("cargo:rerun-if-changed={}", path_str);
-        }
-
-        if is_valid_hook_file(&entry) {
-            install_hook(&user_hook_path, &git_hooks_dir)?;
-            installed_count += 1;
+    // Ensure all files in .husky are executable on Unix
+    #[cfg(unix)]
+    {
+        for entry in fs::read_dir(&user_hooks_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(&path)?.permissions();
+                if perms.mode() & 0o111 == 0 {
+                    perms.set_mode(perms.mode() | 0o111);
+                    fs::set_permissions(&path, perms)?;
+                }
+            }
         }
     }
 
-    if installed_count > 0 {
-        println!(
-            "cargo:warning=husky-rs: Installed {} Git hook(s)",
-            installed_count
-        );
-    }
-
+    println!("cargo:warning=husky-rs: Configured core.hooksPath to .husky");
     Ok(())
 }
 
@@ -209,127 +165,4 @@ fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
         return Err(HuskyError::GitDirNotFound(git_dir.display().to_string()));
     }
     Ok(git_dir)
-}
-
-fn is_valid_hook_file(entry: &fs::DirEntry) -> bool {
-    let path = entry.path();
-    // fs::metadata follows symlinks. If we wanted to check the symlink itself,
-    // we would use fs::symlink_metadata().
-    let metadata_result = fs::metadata(&path);
-
-    let is_file_type = metadata_result.map(|md| md.is_file()).unwrap_or(false);
-
-    is_file_type && VALID_HOOK_NAMES.contains(&entry.file_name().to_str().unwrap_or(""))
-}
-
-fn install_hook(user_hook_path: &Path, git_hooks_dir: &Path) -> Result<()> {
-    let hook_name = user_hook_path.file_name().unwrap().to_string_lossy();
-    let dst = git_hooks_dir.join(user_hook_path.file_name().unwrap());
-    let user_script_lines = read_file_lines(user_hook_path)?;
-
-    if user_script_lines.is_empty() {
-        eprintln!("cargo:warning=husky-rs: Skipping empty hook: {}", hook_name);
-        return Err(HuskyError::EmptyUserHook(user_hook_path.to_owned()));
-    }
-
-    let (shebang, actual_script_body, had_shebang) = extract_shebang_and_body(user_script_lines);
-
-    // Warn if no shebang was found
-    if !had_shebang {
-        println!(
-            "cargo:warning=husky-rs: Hook '{}' missing shebang, using default: {}",
-            hook_name, shebang
-        );
-    }
-
-    let final_hook_script_lines = generate_husky_hook_script(shebang, actual_script_body);
-    write_executable_file(&dst, &final_hook_script_lines)?;
-
-    println!("cargo:warning=husky-rs: ✓ {}", hook_name);
-    Ok(())
-}
-
-// Extracts shebang and body from user script lines.
-// If a valid shebang is found on the first line, it's extracted separately
-// so we can place the husky header between it and the script body.
-// Returns (shebang, body, had_shebang_flag)
-fn extract_shebang_and_body(user_script_lines: Vec<String>) -> (String, Vec<String>, bool) {
-    let mut actual_script_body = user_script_lines;
-    let mut had_shebang = false;
-
-    // Check first line for a known shebang pattern
-    let shebang = if let Some(first_line) = actual_script_body.first() {
-        if SHEBANGS.contains(&first_line.trim()) {
-            // Found valid shebang - remove from body (we'll prepend it later)
-            had_shebang = true;
-            let s = first_line.trim().to_string();
-            actual_script_body = actual_script_body.into_iter().skip(1).collect();
-            s
-        } else {
-            "#!/usr/bin/env bash".to_string()
-        }
-    } else {
-        "#!/usr/bin/env bash".to_string()
-    };
-
-    (shebang, actual_script_body, had_shebang)
-}
-
-// Generates the full hook script content with husky header.
-fn generate_husky_hook_script(shebang: String, actual_script_body: Vec<String>) -> Vec<String> {
-    let header_content = format!(
-        "{}
-#
-# {}
-# v{}: {}
-#
-",
-        shebang,
-        HUSKY_HEADER,
-        env!("CARGO_PKG_VERSION"),
-        env!("CARGO_PKG_HOMEPAGE")
-    );
-
-    let mut final_script_lines = vec![header_content];
-    final_script_lines.extend(actual_script_body);
-    final_script_lines
-}
-
-fn read_file_lines(path: &Path) -> Result<Vec<String>> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    // Collect only non-whitespace lines
-    let lines: Vec<String> = reader
-        .lines()
-        .collect::<io::Result<Vec<String>>>()?
-        .into_iter()
-        .filter(|line| !line.trim().is_empty()) // Keep only lines with non-whitespace content
-        .collect();
-
-    Ok(lines) // Return the filtered lines. If all lines were whitespace/empty, this will be an empty Vec.
-}
-
-fn write_executable_file(path: &Path, content: &[String]) -> Result<()> {
-    let mut file = create_executable_file(path)?;
-    for line in content {
-        writeln!(file, "{}", line)?;
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn create_executable_file(path: &Path) -> io::Result<File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o755)
-        .open(path)
-}
-
-#[cfg(not(unix))]
-fn create_executable_file(path: &Path) -> io::Result<File> {
-    File::create(path)
 }

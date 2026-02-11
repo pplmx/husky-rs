@@ -6,7 +6,7 @@ This guide provides practical examples for using `husky-rs` Git hooks in your Ru
 
 ### Example 1: Running Tests Before Commit
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -20,7 +20,7 @@ echo "✓ Tests passed"
 
 ### Example 2: Code Formatting Check
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -34,7 +34,7 @@ echo "✓ Code is properly formatted"
 
 ### Example 3: Linting with Clippy
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -50,7 +50,7 @@ echo "✓ No clippy warnings"
 
 ### Example 4: Conventional Commits
 
-Create `.husky/hooks/commit-msg`:
+Create `.husky/commit-msg`:
 
 ```sh
 #!/bin/sh
@@ -76,7 +76,7 @@ fi
 
 ### Example 5: Minimum Message Length
 
-Create `.husky/hooks/commit-msg`:
+Create `.husky/commit-msg`:
 
 ```sh
 #!/bin/sh
@@ -95,7 +95,7 @@ echo "✓ Commit message valid"
 
 ### Example 6: Comprehensive Pre-push
 
-Create `.husky/hooks/pre-push`:
+Create `.husky/pre-push`:
 
 ```sh
 #!/bin/sh
@@ -117,7 +117,7 @@ echo "✅ All checks passed! Pushing..."
 
 ### Example 7: Branch Protection
 
-Create `.husky/hooks/pre-push`:
+Create `.husky/pre-push`:
 
 ```sh
 #!/bin/sh
@@ -137,7 +137,7 @@ echo "✓ Pushing to $current_branch"
 
 ### Example 8: Conditional Execution (Skip in CI)
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -154,7 +154,7 @@ cargo test --quiet
 
 ### Example 9: Multi-language Project
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -179,7 +179,7 @@ echo "✓ All checks passed"
 
 ### Example 10: Prevent Secrets Commit
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -204,7 +204,7 @@ echo "✓ No obvious secrets detected"
 
 ### Example 11: Auto-generate Documentation
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```sh
 #!/bin/sh
@@ -221,7 +221,7 @@ fi
 
 ### Example 12: Performance Benchmark Check
 
-Create `.husky/hooks/pre-push`:
+Create `.husky/pre-push`:
 
 ```sh
 #!/bin/sh
@@ -241,7 +241,7 @@ echo "✓ Benchmarks compiled successfully"
 
 ### Example 13: Python-based Hook
 
-Create `.husky/hooks/pre-commit`:
+Create `.husky/pre-commit`:
 
 ```python
 #!/usr/bin/env python3
@@ -341,14 +341,14 @@ git push --no-verify
 
 1. Check hook file permissions (should be executable on Unix)
 2. Verify hook name matches Git's supported hooks
-3. Check for syntax errors: `sh -n .husky/hooks/pre-commit`
+3. Check for syntax errors: `sh -n .husky/pre-commit`
 
 ### Hook Running Twice
 
 This shouldn't happen with `husky-rs`. If it does, check that you don't have duplicate hooks in:
 
 - `.git/hooks/`
-- `.husky/hooks/`
+- `.husky/`
 
 ### Slow Hook Execution
 

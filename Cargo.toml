@@ -17,8 +17,6 @@ build = "build.rs"
 [[bin]]
 name = "husky"
 path = "src/bin/husky.rs"
-required-features = ["cli"]
 
 [features]
 default = []
-cli = []

@@ -68,11 +68,11 @@ All notable changes to this project will be documented in this file.
 
 #### Optional CLI Tool
 
-> Install with: `cargo install husky-rs --features=cli`
+> Install with: `cargo install husky-rs`
 
 | Command | Description |
 | --------- | ------------- |
-| `husky init` | Create `.husky/hooks` directory |
+| `husky init` | Create `.husky` directory |
 | `husky add <hook>` | Create hook from smart template |
 | `husky list` | List installed hooks with status |
 | `husky help` | Show help message |

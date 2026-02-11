@@ -30,7 +30,6 @@ fn test_install_with_dep() -> Result<(), Error> {
 
     for hook in HOOK_TYPES {
         project.assert_hook_installed(hook);
-        project.assert_hook_contains(hook, "husky-rs");
     }
     Ok(())
 }
@@ -106,20 +105,6 @@ fn test_install_skipped_with_env_var() -> Result<(), Error> {
 // Edge Cases
 // ============================================================================
 
-/// Empty hooks cause build failure.
-#[test]
-fn test_install_rejects_empty_hooks() -> Result<(), Error> {
-    let project = TestProject::new("install-empty-")?;
-    project.add_husky_rs("dependencies", false)?;
-
-    let hooks_dir = project.path.join(".husky").join("hooks");
-    fs::create_dir_all(&hooks_dir)?;
-    fs::write(hooks_dir.join("pre-commit"), "")?;
-
-    assert!(project.build().is_err());
-    Ok(())
-}
-
 /// Symbolic link hooks work (Unix only).
 #[test]
 fn test_install_symlink_hook() -> Result<(), Error> {
@@ -130,7 +115,7 @@ fn test_install_symlink_hook() -> Result<(), Error> {
         let project = TestProject::new("install-symlink-")?;
         project.add_husky_rs("dependencies", false)?;
 
-        let hooks_dir = project.path.join(".husky").join("hooks");
+        let hooks_dir = project.path.join(".husky");
         fs::create_dir_all(&hooks_dir)?;
 
         let script = project.path.join("script.sh");
@@ -286,25 +271,6 @@ husky-rs = {{ path = {:?} }}
 // ============================================================================
 // Error Messages
 // ============================================================================
-
-/// Error message for empty hook is clear.
-#[test]
-fn test_error_message_empty_hook() -> Result<(), Error> {
-    let project = TestProject::new("error-empty-")?;
-    project.add_husky_rs("dependencies", false)?;
-
-    let hooks_dir = project.path.join(".husky").join("hooks");
-    fs::create_dir_all(&hooks_dir)?;
-    fs::write(hooks_dir.join("pre-commit"), "")?;
-
-    let result = project.cargo(&["build"])?;
-    assert!(!result.success);
-    assert!(
-        result.stderr.contains("empty") || result.stderr.contains("Empty"),
-        "Error should mention 'empty'"
-    );
-    Ok(())
-}
 
 // ============================================================================
 // Multiple Hooks

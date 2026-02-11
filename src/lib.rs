@@ -4,13 +4,13 @@
 //!
 //! ## Zero-Config Usage
 //!
-//! Just add `husky-rs` as a dependency and create hooks in `.husky/hooks/`.
+//! Just add `husky-rs` as a dependency and create hooks in `.husky/`.
 //! The hooks will be automatically installed when you build your project:
 //!
 //! ```sh
 //! cargo add husky-rs
-//! mkdir -p .husky/hooks
-//! echo '#!/bin/sh\necho "Running pre-commit hook"' > .husky/hooks/pre-commit
+//! mkdir -p .husky
+//! echo '#!/bin/sh\necho "Running pre-commit hook"' > .husky/pre-commit
 //! cargo build  # Hooks installed automatically!
 //! ```
 //!
@@ -18,8 +18,8 @@
 //!
 //! ## How It Works
 //!
-//! `husky-rs` uses a build script (`build.rs`) to automatically copy hooks from
-//! `.husky/hooks/` to `.git/hooks/` during the build process. This means:
+//! `husky-rs` uses a build script (`build.rs`) to automatically configure Git to
+//! use hooks from `.husky/` by setting `core.hooksPath`. This means:
 //!
 //! - Works with both `dependencies` and `dev-dependencies`
 //! - Hooks are installed automatically on `cargo build` or `cargo test`
@@ -45,12 +45,9 @@ use std::path::{Path, PathBuf};
 /// The default directory name for husky configuration (`.husky`)
 pub const HUSKY_DIR: &str = ".husky";
 
-/// The default hooks subdirectory name (`hooks`)
-pub const HUSKY_HOOKS_DIR: &str = "hooks";
-
 /// Returns the standard husky hooks directory path for a given project root.
 ///
-/// This is a convenience function that returns `.husky/hooks` relative to
+/// This is a convenience function that returns `.husky` relative to
 /// the provided project root.
 ///
 /// # Examples
@@ -61,10 +58,10 @@ pub const HUSKY_HOOKS_DIR: &str = "hooks";
 ///
 /// let project_root = Path::new("/path/to/project");
 /// let hooks_path = hooks_dir(project_root);
-/// assert_eq!(hooks_path, Path::new("/path/to/project/.husky/hooks"));
+/// assert_eq!(hooks_path, Path::new("/path/to/project/.husky"));
 /// ```
 pub fn hooks_dir(project_root: impl AsRef<Path>) -> PathBuf {
-    project_root.as_ref().join(HUSKY_DIR).join(HUSKY_HOOKS_DIR)
+    project_root.as_ref().join(HUSKY_DIR)
 }
 
 /// Checks if hook installation should be skipped based on the `NO_HUSKY_HOOKS`
@@ -147,19 +144,19 @@ mod tests {
     #[test]
     fn test_hooks_dir() {
         let path = hooks_dir("/tmp/project");
-        assert_eq!(path, PathBuf::from("/tmp/project/.husky/hooks"));
+        assert_eq!(path, PathBuf::from("/tmp/project/.husky"));
     }
 
     #[test]
     fn test_hooks_dir_with_trailing_slash() {
         let path = hooks_dir("/tmp/project/");
-        assert_eq!(path, PathBuf::from("/tmp/project/.husky/hooks"));
+        assert_eq!(path, PathBuf::from("/tmp/project/.husky"));
     }
 
     #[test]
     fn test_hooks_dir_relative_path() {
         let path = hooks_dir(".");
-        assert!(path.ends_with(".husky/hooks"));
+        assert!(path.ends_with(".husky"));
     }
 
     #[test]
@@ -255,6 +252,5 @@ mod tests {
     #[test]
     fn test_constants_match() {
         assert_eq!(HUSKY_DIR, ".husky");
-        assert_eq!(HUSKY_HOOKS_DIR, "hooks");
     }
 }

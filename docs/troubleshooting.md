@@ -16,31 +16,31 @@ Common issues and solutions when using husky-rs.
 
 **Symptoms:**
 
-- Hooks are in `.husky/hooks/`
+- Hooks are in `.husky/`
 - `cargo build` succeeds
 - Commits/pushes proceed without running hooks
 
 **Solutions:**
 
-1. **Check hook was installed to `.git/hooks/`:**
+1. **Check `core.hooksPath` is configured:**
 
    ```sh
-   ls -la .git/hooks/
+   git config core.hooksPath
    ```
 
-   You should see your hooks with husky-rs headers.
+   You should see `.husky`.
 
 2. **Verify hook has execute permissions (Unix):**
 
    ```sh
-   ls -l .git/hooks/pre-commit
+   ls -l .husky/pre-commit
    # Should show: -rwxr-xr-x
    ```
 
    If not executable:
 
    ```sh
-   chmod +x .git/hooks/pre-commit
+   chmod +x .husky/pre-commit
    ```
 
 3. **Check for hooks installed by other tools:**
@@ -68,10 +68,9 @@ husky-rs now detects changes automatically. Just rebuild:
 cargo build  # No need for cargo clean anymore!
 ```
 
-If still not working, force reinstall:
+If still not working, force re-run build:
 
 ```sh
-rm -rf .git/hooks/*
 cargo clean && cargo build
 ```
 
@@ -102,7 +101,7 @@ cargo build
 **Error:**
 
 ```text
-Error: EmptyUserHook("/path/to/.husky/hooks/pre-commit")
+Error: EmptyUserHook("/path/to/.husky/pre-commit")
 ```
 
 **Cause:**
@@ -113,12 +112,12 @@ Add actual content to your hook:
 
 ```sh
 # Bad - empty or whitespace only
-.husky/hooks/pre-commit:
+.husky/pre-commit:
 
 
 
 # Good - at least some command
-.husky/hooks/pre-commit:
+.husky/pre-commit:
 #!/bin/sh
 echo "Running hook"
 ```
@@ -182,7 +181,7 @@ error: failed to run custom build command for `husky-rs`
 4. **Validate hook syntax:**
 
    ```sh
-   sh -n .husky/hooks/pre-commit  # Check for syntax errors
+   sh -n .husky/pre-commit  # Check for syntax errors
    ```
 
 ## Platform-Specific Issues
@@ -220,7 +219,7 @@ macOS may block execution of downloaded scripts:
 **Solution:**
 
 ```sh
-chmod +x .husky/hooks/*
+chmod +x .husky/*
 cargo build
 ```
 
@@ -395,14 +394,14 @@ Yes, but husky-rs will overwrite hooks it manages. To preserve existing hooks:
 1. **Move existing hooks:**
 
    ```sh
-   mv .git/hooks/pre-commit .husky/hooks/pre-commit
+   mv .git/hooks/pre-commit .husky/pre-commit
    ```
 
 2. **Or call existing hooks from husky hooks:**
 
    ```sh
    #!/bin/sh
-   # .husky/hooks/pre-commit
+   # .husky/pre-commit
 
    # Run existing hook
    .git/hooks/pre-commit.old

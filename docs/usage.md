@@ -22,10 +22,10 @@ The fastest way to get started with `husky-rs`:
 cargo add husky-rs
 
 # 2. Create hooks directory
-mkdir -p .husky/hooks
+mkdir -p .husky
 
 # 3. Create your first hook
-cat > .husky/hooks/pre-commit << 'EOF'
+cat > .husky/pre-commit << 'EOF'
 #!/bin/sh
 echo "Running tests..."
 cargo test --quiet
@@ -99,7 +99,7 @@ husky-rs supports all Git hooks:
 
 ### Hook File Format
 
-Hooks are shell scripts in `.husky/hooks/`:
+Hooks are shell scripts in `.husky/`:
 
 ```sh
 #!/bin/sh
@@ -248,7 +248,7 @@ cargo test --quiet
 Just edit the file and rebuild:
 
 ```sh
-vim .husky/hooks/pre-commit
+vim .husky/pre-commit
 cargo build  # Automatically reinstalls
 ```
 
@@ -284,7 +284,7 @@ Team members get hooks automatically on next `cargo build`/`cargo test`.
 
 ```sh
 #!/bin/sh
-# .husky/hooks/pre-push
+# .husky/pre-push
 
 branch=$(git symbolic-ref --short HEAD)
 
@@ -380,7 +380,7 @@ Then create `src/bin/hook-validator.rs` with your validation logic.
 Install the optional CLI for convenience commands:
 
 ```sh
-cargo install husky-rs --features=cli
+cargo install husky-rs
 ```
 
 ### Commands
