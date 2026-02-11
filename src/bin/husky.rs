@@ -84,7 +84,7 @@ fn init_husky() -> io::Result<()> {
         return Ok(());
     }
 
-    fs::create_dir_all(&hooks_dir)?;
+    fs::create_dir_all(hooks_dir)?;
     println!("✓ Created .husky directory");
 
     let status = process::Command::new("git")
@@ -158,7 +158,7 @@ fn add_hook(hook_name: &str) -> io::Result<()> {
 
     let hooks_dir = Path::new(".husky");
     if !hooks_dir.exists() {
-        fs::create_dir_all(&hooks_dir)?;
+        fs::create_dir_all(hooks_dir)?;
         println!("✓ Created .husky directory");
     }
 
@@ -200,7 +200,7 @@ fn list_hooks() -> io::Result<()> {
         return Ok(());
     }
 
-    let entries: Vec<_> = fs::read_dir(&hooks_dir)?
+    let entries: Vec<_> = fs::read_dir(hooks_dir)?
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.path().is_file())
         .collect();
