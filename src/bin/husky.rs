@@ -97,25 +97,8 @@ fn init_husky() -> io::Result<()> {
         Err(_) => println!("⚠ Git command not found, skipping configuration"),
     }
 
-    let internal_dir = hooks_dir.join("_");
-    if !internal_dir.exists() {
-        fs::create_dir_all(&internal_dir)?;
-    }
-
-    let husky_sh = internal_dir.join("husky.sh");
-    if !husky_sh.exists() {
-        let content = r#"#!/bin/sh
-if [ -z "$husky_skip_init" ]; then
-  if [ "$HUSKY" = "0" ]; then
-    exit 0
-  fi
-  readonly husky_skip_init=1
-fi
-"#;
-        fs::write(&husky_sh, content)?;
-    }
-
     println!();
+
     println!("Next steps:");
     println!("  1. Add husky-rs to your Cargo.toml:");
     println!("     cargo add husky-rs");
@@ -246,7 +229,7 @@ fn get_hook_template(hook_name: &str) -> String {
     match hook_name {
         "pre-commit" => {
             r#"#!/bin/sh
-# . "$(dirname "$0")/_/husky.sh"
+[ "$HUSKY" = "0" ] && exit 0
 
 echo "Running pre-commit checks..."
 
@@ -267,7 +250,7 @@ echo "✓ Pre-commit checks passed"
         }
         "commit-msg" => {
             r#"#!/bin/sh
-# . "$(dirname "$0")/_/husky.sh"
+[ "$HUSKY" = "0" ] && exit 0
 
 commit_msg_file="$1"
 commit_msg=$(cat "$commit_msg_file")
@@ -291,7 +274,7 @@ echo "✓ Commit message valid"
         }
         "pre-push" => {
             r#"#!/bin/sh
-# . "$(dirname "$0")/_/husky.sh"
+[ "$HUSKY" = "0" ] && exit 0
 
 echo "Running pre-push checks..."
 
@@ -312,7 +295,7 @@ echo "✅ All checks passed! Pushing..."
         }
         _ => {
             r#"#!/bin/sh
-# . "$(dirname "$0")/_/husky.sh"
+[ "$HUSKY" = "0" ] && exit 0
 
 echo "Running hook..."
 

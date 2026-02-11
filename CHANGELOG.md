@@ -2,12 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.1] - 2026-02-11
-
-### Some minor fixes and improvements
-
-- Just linting and clippy updates, no major changes since 0.3.0
-
 ## [0.3.0] - 2026-02-11
 
 ### 🎯 Highlights
@@ -25,16 +19,16 @@ All notable changes to this project will be documented in this file.
 
 - **Helper Script Support**: Arbitrary files (like `_helpers.sh`) can now be stored in `.husky/` and sourced from hooks.
 - **Runtime Control**: Support for `HUSKY=0` environment variable to skip hooks at runtime (e.g., `HUSKY=0 git commit`).
-- **Runtime Helper**: Added `.husky/_/husky.sh` which can be sourced by hooks for standardized behavior.
 - **CLI Enhancements**:
-    - `husky init`: Now configures `core.hooksPath` immediately and creates the `_/husky.sh` helper.
+    - `husky init`: Now configures `core.hooksPath` immediately.
     - `husky uninstall`: New command to unset `core.hooksPath`.
-    - `husky add`: Templates updated to include `_/husky.sh` sourcing example.
+    - `husky add`: Templates updated to include `HUSKY=0` skip logic by default.
 
 ### 🚀 Performance & Robustness
 
 - **Incremental Builds**: `build.rs` now checks `core.hooksPath` before calling `git config`, speeding up builds.
 - **Graceful Degradation**: Better handling of environments without `git` command or outside git repositories.
+- **Lean Implementation**: Removed `_/husky.sh` in favor of direct skip logic in hook templates for a cleaner directory structure.
 
 ---
 
