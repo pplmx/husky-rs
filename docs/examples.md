@@ -310,13 +310,85 @@ Before committing your hooks, test them manually:
 echo "test message" | .husky/commit-msg
 ```
 
-Or run the end-to-end verification script that simulates a real project:
+## End-to-End Verification
+
+The following script simulates two real-project scenarios to verify hook
+installation works end-to-end. Save it as a file and run from your husky-rs repo:
 
 ```sh
-# From the husky-rs repo:
-./docs/verify.sh
-# Or specify a custom husky-rs path:
-./docs/verify.sh /path/to/husky-rs
+#!/usr/bin/env bash
+# End-to-end verification for husky-rs hook installation.
+#
+# Two scenarios:
+#   1. Standard: .husky/ exists before cargo test → hooksPath set → hook fires
+#   2. Lazy:     cargo test before .husky/ exists → second cargo test
+#                re-runs build script → hooksPath set → hook fires
+#
+# Usage: ./verify.sh [/path/to/husky-rs]
+
+set -e
+
+HUSKY_RS_PATH="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+if [ ! -f "$HUSKY_RS_PATH/Cargo.toml" ]; then
+    echo "Error: $HUSKY_RS_PATH is not a husky-rs repo"
+    exit 1
+fi
+
+TMPDIR="/tmp/husky-rs-verify"
+rm -rf "$TMPDIR"
+
+run_scenario() {
+    local name="$1"
+    local dir="$TMPDIR/$name"
+    mkdir -p "$dir" && cd "$dir"
+    git init -q && git config user.email "t@t.com" && git config user.name "T"
+    cargo init --bin -q
+    cargo add --dev --path "$HUSKY_RS_PATH" husky-rs -q
+}
+
+# Scenario 1: Standard flow
+echo "========== Scenario 1: Standard =========="
+run_scenario scenario1
+mkdir -p .husky
+cat > .husky/pre-commit << 'HOOK'
+#!/bin/sh
+echo ">>> PRE-COMMIT HOOK TRIGGERED <<<"
+exit 0
+HOOK
+chmod +x .husky/pre-commit
+echo "--- cargo test ---"
+cargo test -q 2>&1
+echo "--- core.hooksPath (expect .husky) ---"
+git config core.hooksPath
+echo "--- git commit ---"
+touch foo && git add foo && git commit -qm "test: s1"
+
+# Scenario 2: Lazy flow (cargo test before .husky/ exists)
+echo ""
+echo "========== Scenario 2: Lazy =========="
+run_scenario scenario2
+echo "--- cargo test BEFORE .husky/ ---"
+cargo test -q 2>&1
+echo "--- core.hooksPath (expect empty) ---"
+git config core.hooksPath || echo "(not set)"
+mkdir -p .husky
+cat > .husky/pre-commit << 'HOOK'
+#!/bin/sh
+echo ">>> LAZY HOOK FIRED <<<"
+exit 0
+HOOK
+chmod +x .husky/pre-commit
+echo "--- cargo test AGAIN ---"
+cargo test -q 2>&1
+echo "--- core.hooksPath (expect .husky) ---"
+git config core.hooksPath
+echo "--- git commit ---"
+touch bar && git add bar && git commit -qm "test: s2"
+
+rm -rf "$TMPDIR"
+echo ""
+echo "PASS: both scenarios verified"
 ```
 
 ### Use `set -e` for Safety
