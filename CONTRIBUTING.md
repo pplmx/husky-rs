@@ -181,7 +181,7 @@ cargo doc --no-deps 2>&1 | grep warning
 
 ### Useful Commands
 
-See the [Makefile](../Makefile) for all available commands:
+See the [Makefile](./Makefile) for all available commands:
 
 ```shell
 make help        # Show all commands

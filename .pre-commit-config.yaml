@@ -1,19 +1,25 @@
 fail_fast: true
-
 repos:
-    -   repo: https://github.com/pre-commit/pre-commit-hooks
-        rev: v5.0.0
-        hooks:
-            -   id: check-merge-conflict
-            -   id: check-toml
-            -   id: check-yaml
-            -   id: end-of-file-fixer
-            -   id: mixed-line-ending
-                args: [ --fix=lf ]
-            -   id: trailing-whitespace
-    -   repo: https://github.com/commitizen-tools/commitizen
-        rev: v3.31.0
-        hooks:
+    - repo: builtin
+      hooks:
+          - id: end-of-file-fixer
+          - id: trailing-whitespace
+            exclude: \.md$
+          - id: check-toml
+          - id: check-yaml
+          - id: check-merge-conflict
+          - id: mixed-line-ending
+            args: ["--fix=lf"]
+
+    - repo: https://github.com/commitizen-tools/commitizen
+      rev: v4.16.0
+      hooks:
             -   id: commitizen
             -   id: commitizen-branch
                 stages: [ pre-push ]
+
+    - repo: https://github.com/rvben/rumdl-pre-commit
+      rev: v0.1.91
+      hooks:
+          - id: rumdl # Lint + auto-fix, fails if unfixable issues remain
+          - id: rumdl-fmt # Pure format, always exits 0

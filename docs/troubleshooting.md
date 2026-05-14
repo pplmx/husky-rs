@@ -12,6 +12,29 @@ Common issues and solutions when using husky-rs.
 
 ## Hooks Not Running
 
+### Hooks not running after creating .husky/ directory
+
+**Symptoms:**
+
+- `husky list` shows hooks exist
+- `cargo test` / `cargo build` succeeds
+- `git config core.hooksPath` returns nothing (not set)
+- Git commands don't trigger hooks
+
+**Cause:**
+If `cargo build` or `cargo test` ran before you created the `.husky/` directory, the build script was cached and never re-ran. This was a bug in versions prior to the unreleased fix (#15).
+
+**Solution (fixed in next release):**
+Upgrade husky-rs. The build script now correctly detects when `.husky/` is created or changed and re-runs automatically.
+
+**Workaround for older versions:**
+
+```sh
+cargo clean && cargo build   # Force re-run of build script
+# Or manually:
+git config core.hooksPath .husky
+```
+
 ### Hook files exist but don't execute
 
 **Symptoms:**
@@ -230,7 +253,7 @@ cargo build
 **Error:**
 
 ```text
-.git/hooks/pre-commit: /usr/bin/env: 'python3': No such file or directory
+.husky/pre-commit: /usr/bin/env: 'python3': No such file or directory
 ```
 
 **Solution:**
@@ -266,7 +289,7 @@ Or change shebang to installed interpreter:
 1. **Profile your hook:**
 
    ```sh
-   time .git/hooks/pre-commit
+    time .husky/pre-commit
    ```
 
 2. **Run only changed files:**
@@ -292,7 +315,7 @@ Or change shebang to installed interpreter:
 
    ```sh
    #!/bin/sh
-   last_run_hash=$(cat .git/hooks/.last-test-run 2>/dev/null || echo "")
+    last_run_hash=$(cat .husky/.last-test-run 2>/dev/null || echo "")
    current_hash=$(git rev-parse HEAD)
 
    if [ "$last_run_hash" = "$current_hash" ]; then
@@ -301,7 +324,7 @@ Or change shebang to installed interpreter:
    fi
 
    if cargo test --quiet; then
-       echo "$current_hash" > .git/hooks/.last-test-run
+        echo "$current_hash" > .husky/.last-test-run
    fi
    ```
 
@@ -479,12 +502,13 @@ If your issue isn't covered here:
 
 1. **Check GitHub Issues:** [github.com/pplmx/husky-rs/issues](https://github.com/pplmx/husky-rs/issues)
 2. **Open a new issue:** Include:
-   - OS and version
-   - Rust version (`rustc --version`)
-   - husky-rs version
-   - Hook file contents
-   - Full error output (`cargo build -vv`)
-   - Output of `ls -la .git/hooks/`
+    - OS and version
+    - Rust version (`rustc --version`)
+    - husky-rs version
+    - Hook file contents
+    - Full error output (`cargo build -vv`)
+    - Output of `ls -la .husky/`
+    - Output of `git config core.hooksPath`
 3. **Enable debug logging:**
 
    ```sh

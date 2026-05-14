@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 🐛 Bug Fixes
+
+- **`cargo:rerun-if-changed` watched wrong directory**: The build script monitored husky-rs's own `.husky/` instead of the user's project `.husky/`. If `cargo build`/`cargo test` ran before `.husky/` existed, subsequent runs were cached and never re-ran — `core.hooksPath` was never set, hooks never triggered. (#15)
+- **Submodule and worktree support**: `.git` files were not correctly parsed (missing `gitdir:` prefix stripping). Hooks were silently never installed in submodules and git worktrees.
+- **`GitConfigFailed` now tolerated**: Build no longer fails if `git` is unavailable on PATH (e.g. NixOS without nix-shell). Users can fall back to `husky init` manually.
+
+### ✨ Improvements
+
+- **Windows compatibility**: Hook trigger tests now convert backslashes to forward slashes for Git Bash compatibility.
+- **Comprehensive test coverage**: Added 17 new tests covering lazy hook creation, idempotent repeated execution, mixed `cargo test`/`cargo build`, hook triggering (pre-commit, commit-msg, post-commit, failure abort), CLI full workflow, and `git` failure graceful degradation.
+
 ## [0.3.2] - 2026-02-11
 
 ### 🚀 Improvements & Refinements
@@ -109,13 +122,13 @@ All notable changes to this project will be documented in this file.
 
 > Install with: `cargo install husky-rs --features=cli`
 
-| Command | Description |
-| --------- | ------------- |
-| `husky init` | Create `.husky/hooks` directory |
-| `husky add <hook>` | Create hook from smart template |
-| `husky list` | List installed hooks with status |
-| `husky help` | Show help message |
-| `husky version` | Display version |
+| Command            | Description                      |
+| ------------------ | -------------------------------- |
+| `husky init`       | Create `.husky/hooks` directory  |
+| `husky add <hook>` | Create hook from smart template  |
+| `husky list`       | List installed hooks with status |
+| `husky help`       | Show help message                |
+| `husky version`    | Display version                  |
 
 #### Optional Library API
 
@@ -132,12 +145,12 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ### 📚 Documentation
 
-| Document | Description |
-| ---------- | ------------- |
-| [Usage Guide](docs/usage.md) | Installation, configuration, advanced usage |
-| [Examples](docs/examples.md) | 13 ready-to-use hook examples |
-| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
-| [Contributing](CONTRIBUTING.md) | Development guide |
+| Document                                   | Description                                 |
+| ------------------------------------------ | ------------------------------------------- |
+| [Usage Guide](docs/usage.md)               | Installation, configuration, advanced usage |
+| [Examples](docs/examples.md)               | 13 ready-to-use hook examples               |
+| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions                 |
+| [Contributing](CONTRIBUTING.md)            | Development guide                           |
 
 **Example collection includes:**
 
@@ -155,12 +168,12 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ### 🧪 Testing
 
-| Metric | Before | After | Change |
-| --------- | -------- | ------- | -------- |
-| Total tests | 13 | 48 | **+269%** |
-| CLI coverage | 0% | 90% | — |
-| Lib coverage | 40% | 100% | — |
-| Example validation | 0% | 54% | — |
+| Metric             | Before | After | Change    |
+| ------------------ | ------ | ----- | --------- |
+| Total tests        | 13     | 48    | **+269%** |
+| CLI coverage       | 0%     | 90%   | —         |
+| Lib coverage       | 40%    | 100%  | —         |
+| Example validation | 0%     | 54%   | —         |
 
 ---
 

@@ -1,0 +1,32 @@
+[global]
+disable = ["MD029", "MD034", "MD036", "MD059", "MD033", "MD025"]
+respect_gitignore = true
+exclude = [
+    ".planning",
+    "docs/superpowers",
+    "docs/infographic",
+    "CLAUDE.md",
+    "AGENTS.md",
+]
+
+[MD004]
+style = "dash"
+
+[MD007]
+indent = 4
+style = "fixed"
+
+[MD013]
+code-blocks = false
+line-length = 512
+tables = false
+
+[MD024]
+siblings-only = true
+
+[MD026]
+punctuation = ".,;:!。，；：！"
+
+[MD060]
+enabled = true
+style = "aligned"

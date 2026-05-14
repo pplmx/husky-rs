@@ -71,7 +71,10 @@ cargo build  # Does NOT install hooks
 Use the latest development version:
 
 ```sh
-cargo add --git https://github.com/pplmx/husky-rs --branch main
+# Add to your project from Git repository (specific branch):
+cargo add --git https://github.com/pplmx/husky-rs.git --branch main
+# Add to your project dev-dependency from Git repository default branch:
+cargo add --dev --git https://github.com/pplmx/husky-rs.git
 ```
 
 ## Creating Hooks
