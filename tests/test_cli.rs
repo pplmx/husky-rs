@@ -2,7 +2,10 @@
 
 mod common;
 
-use common::{create_temp_dir, run_command, run_command_success, run_husky};
+use common::{
+    add_husky_dependency, create_temp_dir, get_husky_rs_path, run_command, run_command_success,
+    run_husky, verify_hook_installed,
+};
 use std::fs;
 
 // ============================================================================
@@ -201,4 +204,41 @@ fn test_cli_uninstall() {
 
     let output = run_command("git", &["config", "core.hooksPath"], &dir).unwrap();
     assert!(!output.success);
+}
+
+// ============================================================================
+// Full Workflow
+// ============================================================================
+
+/// End-to-end CLI workflow: husky init → husky add → cargo build → hooks installed.
+#[test]
+fn test_cli_full_workflow_init_add_build() {
+    let dir = create_temp_dir("husky-cli-workflow-").unwrap();
+
+    // Setup a git+cargo project
+    run_command_success("git", &["init"], &dir).unwrap();
+    run_command_success("git", &["config", "user.email", "t@t.com"], &dir).unwrap();
+    run_command_success("git", &["config", "user.name", "T"], &dir).unwrap();
+    run_command_success("cargo", &["init", "--bin"], &dir).unwrap();
+
+    // Step 1: husky init
+    let (stdout, _, success) = run_husky(&["init"], &dir);
+    assert!(success);
+    assert!(stdout.contains("Created .husky directory"));
+
+    // Step 2: husky add pre-commit
+    let (stdout, _, success) = run_husky(&["add", "pre-commit"], &dir);
+    assert!(success);
+    assert!(stdout.contains("Created hook: pre-commit"));
+    assert!(dir.join(".husky").join("pre-commit").exists());
+
+    // Step 3: add husky-rs as dependency
+    add_husky_dependency(&dir.join("Cargo.toml"), &get_husky_rs_path()).unwrap();
+
+    // Step 4: cargo build triggers build.rs installation
+    let output = run_command("cargo", &["build"], &dir).unwrap();
+    assert!(output.success);
+
+    // Verify: hooksPath set + hook file exists
+    assert!(verify_hook_installed(&dir, "pre-commit"));
 }

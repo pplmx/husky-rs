@@ -144,6 +144,53 @@ fn test_install_no_git_directory() -> Result<(), Error> {
     Ok(())
 }
 
+/// Git config failures are handled gracefully — build should not fail.
+#[test]
+fn test_install_git_config_fails_gracefully() -> Result<(), Error> {
+    let project = TestProject::new("install-git-fail-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hooks()?;
+
+    // Create a fake git script that exits non-zero, simulating git failure
+    let fake_dir = project.path.join("fake-bin");
+    fs::create_dir_all(&fake_dir)?;
+    let git_script = fake_dir.join("git");
+    fs::write(&git_script, "#!/bin/sh\nexit 1\n")?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&git_script, fs::Permissions::from_mode(0o755))?;
+    }
+
+    let path = format!(
+        "{}:{}",
+        fake_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "build should succeed even if git config fails"
+    );
+
+    // hooksPath was not set (fake git failed), but hook files still exist on disk
+    for hook in HOOK_TYPES {
+        assert!(
+            project.path.join(".husky").join(hook).exists(),
+            "hook file {} should still exist on disk",
+            hook
+        );
+    }
+    Ok(())
+}
+
 /// Hook changes trigger reinstall.
 #[test]
 fn test_install_detects_hook_changes() -> Result<(), Error> {
@@ -212,6 +259,7 @@ fn test_install_in_submodule() -> Result<(), Error> {
 
     let build = run_command("cargo", &["build"], &sub_path)?;
     assert!(build.success);
+    assert!(verify_hook_installed(&sub_path, "pre-commit"));
 
     Ok(())
 }
@@ -269,8 +317,182 @@ husky-rs = {{ path = {:?} }}
 }
 
 // ============================================================================
-// Error Messages
+// Lazy Hook Creation
 // ============================================================================
+
+/// Dev dependency: cargo test runs without .husky/, hooks created later,
+/// subsequent cargo test detects and installs them.
+/// This validates the cargo:rerun-if-changed fix for the user's .husky/.
+#[test]
+fn test_lazy_hooks_dev_dep() -> Result<(), Error> {
+    let project = TestProject::new("lazy-dev-")?;
+    project.add_husky_rs("dev-dependencies", false)?;
+
+    // Step 1: cargo test without any hooks
+    project.test()?;
+    assert!(!verify_hook_installed(&project.path, "pre-commit"));
+
+    // Step 2: create hooks
+    project.create_hooks()?;
+
+    // Step 3: cargo test again — should re-run build script and install hooks
+    project.test()?;
+    project.verify_hooks(true)
+}
+
+/// Regular dependency: cargo build runs without .husky/, hooks created later,
+/// subsequent cargo build detects and installs them.
+#[test]
+fn test_lazy_hooks_dep() -> Result<(), Error> {
+    let project = TestProject::new("lazy-dep-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    // Step 1: cargo build without any hooks
+    project.build()?;
+    assert!(!verify_hook_installed(&project.path, "pre-commit"));
+
+    // Step 2: create hooks
+    project.create_hooks()?;
+
+    // Step 3: cargo build again — should re-run build script and install hooks
+    project.build()?;
+    project.verify_hooks(true)
+}
+
+// ============================================================================
+// core.hooksPath Already Set
+// ============================================================================
+
+/// core.hooksPath is already ".husky" — no re-config attempt needed.
+#[test]
+fn test_install_hooks_path_already_set() -> Result<(), Error> {
+    let project = TestProject::new("already-set-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hooks()?;
+
+    // First build sets hooksPath
+    project.build()?;
+    project.verify_hooks(true)?;
+
+    // Second build — hooksPath already ".husky", should be a no-op
+    project.build()?;
+    project.verify_hooks(true)?;
+
+    Ok(())
+}
+
+/// core.hooksPath is set to a different value — gets overridden to ".husky".
+#[test]
+fn test_install_overrides_existing_hooks_path() -> Result<(), Error> {
+    let project = TestProject::new("override-")?;
+
+    // Set a custom hooksPath before husky runs
+    run_command_success(
+        "git",
+        &["config", "core.hooksPath", "custom-hooks"],
+        &project.path,
+    )?;
+
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hooks()?;
+    project.build()?;
+    project.verify_hooks(true)
+}
+
+// ============================================================================
+// Idempotent Repeated Execution
+// ============================================================================
+
+/// Repeated cargo build (3x) on an already-installed project does not break hooks.
+#[test]
+fn test_idempotent_repeated_build() -> Result<(), Error> {
+    let project = TestProject::new("idem-build-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hooks()?;
+
+    // Install once
+    project.build()?;
+    project.verify_hooks(true)?;
+
+    // Repeat — hooks should remain intact
+    for i in 1..=3 {
+        project.build()?;
+        assert!(
+            verify_hook_installed(&project.path, "pre-commit"),
+            "hooks should still be installed after build #{}",
+            i
+        );
+    }
+    Ok(())
+}
+
+/// Repeated cargo test (3x) with dev-dependency does not break hooks.
+#[test]
+fn test_idempotent_repeated_test() -> Result<(), Error> {
+    let project = TestProject::new("idem-test-")?;
+    project.add_husky_rs("dev-dependencies", false)?;
+    project.create_hooks()?;
+
+    // Install once via cargo test
+    project.test()?;
+    project.verify_hooks(true)?;
+
+    // Repeat — hooks should remain intact
+    for i in 1..=3 {
+        project.test()?;
+        assert!(
+            verify_hook_installed(&project.path, "pre-commit"),
+            "hooks should still be installed after test #{}",
+            i
+        );
+    }
+    Ok(())
+}
+
+// ============================================================================
+// Mixed cargo test + cargo build
+// ============================================================================
+
+/// Dev-dependency: cargo test installs hooks, cargo build does not undo them.
+#[test]
+fn test_mixed_dev_dep_test_then_build() -> Result<(), Error> {
+    let project = TestProject::new("mixed-dev-")?;
+    project.add_husky_rs("dev-dependencies", false)?;
+    project.create_hooks()?;
+
+    // cargo test installs hooks (dev-dep build script runs for test targets)
+    project.test()?;
+    project.verify_hooks(true)?;
+
+    // cargo build does NOT trigger dev-dep build script, but hooksPath is a
+    // git config setting — it persists across commands regardless
+    project.build()?;
+    project.verify_hooks(true)?;
+
+    // cargo test again — hooks still in place
+    project.test()?;
+    project.verify_hooks(true)
+}
+
+/// Regular dependency: cargo build installs hooks, cargo test keeps them.
+#[test]
+fn test_mixed_dep_build_then_test() -> Result<(), Error> {
+    let project = TestProject::new("mixed-dep-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hooks()?;
+
+    // cargo build installs hooks
+    project.build()?;
+    project.verify_hooks(true)?;
+
+    // cargo test (regular dep build script runs for all targets)
+    project.test()?;
+    project.verify_hooks(true)?;
+
+    // cargo build again
+    project.build()?;
+    project.verify_hooks(true)
+}
 
 // ============================================================================
 // Multiple Hooks
@@ -307,6 +529,140 @@ fn test_install_all_hook_types() -> Result<(), Error> {
         project.assert_hook_installed(hook);
         project.assert_hook_contains(hook, hook);
     }
+    Ok(())
+}
+
+// ============================================================================
+// Hook Triggering Verification
+// ============================================================================
+
+/// pre-commit hook actually triggers during `git commit`.
+#[test]
+fn test_hook_triggers_pre_commit() -> Result<(), Error> {
+    let project = TestProject::new("trigger-pre-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    let marker = project.path.join("hook_ran");
+    project.create_hook(
+        "pre-commit",
+        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker.display()),
+    )?;
+    project.build()?;
+
+    // Add a file so there's something to commit
+    fs::write(project.path.join("foo.txt"), "bar")?;
+    run_command_success("git", &["add", "foo.txt"], &project.path)?;
+
+    let output = run_command(
+        "git",
+        &["commit", "-m", "test: trigger pre-commit"],
+        &project.path,
+    )?;
+
+    assert!(output.success, "commit should succeed: {}", output.stderr);
+    assert!(
+        marker.exists(),
+        "pre-commit hook should have created marker file"
+    );
+
+    Ok(())
+}
+
+/// pre-commit hook that exits non-zero correctly aborts the commit.
+#[test]
+fn test_hook_failure_aborts_commit() -> Result<(), Error> {
+    let project = TestProject::new("trigger-fail-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    // Hook outputs a message then fails — both go to stderr
+    project.create_hook(
+        "pre-commit",
+        "#!/bin/sh\necho 'REJECTED by hook' >&2\nexit 1\n",
+    )?;
+    project.build()?;
+
+    fs::write(project.path.join("foo.txt"), "bar")?;
+    run_command_success("git", &["add", "foo.txt"], &project.path)?;
+
+    let output = run_command("git", &["commit", "-m", "should fail"], &project.path)?;
+
+    assert!(!output.success, "commit should be aborted by failing hook");
+    assert!(
+        output.stderr.contains("REJECTED by hook"),
+        "hook error message should appear in stderr: {:?}",
+        output
+    );
+
+    Ok(())
+}
+
+/// commit-msg hook triggers and receives the commit message.
+#[test]
+fn test_hook_triggers_commit_msg() -> Result<(), Error> {
+    let project = TestProject::new("trigger-msg-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    let marker = project.path.join("msg_ran");
+    // $1 is the path to the commit message file, not the message itself
+    project.create_hook(
+        "commit-msg",
+        &format!("#!/bin/sh\ncat \"$1\" > {}\nexit 0\n", marker.display()),
+    )?;
+    project.build()?;
+
+    fs::write(project.path.join("foo.txt"), "bar")?;
+    run_command_success("git", &["add", "foo.txt"], &project.path)?;
+
+    let output = run_command(
+        "git",
+        &["commit", "-m", "feat: test commit-msg hook"],
+        &project.path,
+    )?;
+
+    assert!(output.success, "commit should succeed: {}", output.stderr);
+    assert!(
+        marker.exists(),
+        "commit-msg hook should have created marker file"
+    );
+
+    let content = fs::read_to_string(&marker)?;
+    assert!(
+        content.contains("feat: test commit-msg hook"),
+        "hook should have received commit message, got: {}",
+        content
+    );
+
+    Ok(())
+}
+
+/// post-commit hook triggers after a successful commit.
+#[test]
+fn test_hook_triggers_post_commit() -> Result<(), Error> {
+    let project = TestProject::new("trigger-post-")?;
+    project.add_husky_rs("dependencies", false)?;
+
+    let marker = project.path.join("post_ran");
+    project.create_hook(
+        "post-commit",
+        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker.display()),
+    )?;
+    project.build()?;
+
+    fs::write(project.path.join("foo.txt"), "bar")?;
+    run_command_success("git", &["add", "foo.txt"], &project.path)?;
+
+    let output = run_command(
+        "git",
+        &["commit", "-m", "test: trigger post-commit"],
+        &project.path,
+    )?;
+
+    assert!(output.success, "commit should succeed: {}", output.stderr);
+    assert!(
+        marker.exists(),
+        "post-commit hook should have created marker file"
+    );
+
     Ok(())
 }
 
@@ -351,6 +707,7 @@ fn test_install_in_worktree() -> Result<(), Error> {
 
     let build = run_command("cargo", &["build"], &worktree)?;
     assert!(build.success);
+    assert!(verify_hook_installed(&worktree, "pre-commit"));
 
     // Cleanup worktree registration
     let _ = run_command(

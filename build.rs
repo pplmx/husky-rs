@@ -60,7 +60,6 @@ const HUSKY_DIR: &str = ".husky";
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-env-changed=NO_HUSKY_HOOKS");
-    println!("cargo:rerun-if-changed=.husky");
 
     if env::var_os("NO_HUSKY_HOOKS").is_some() {
         return Ok(());
@@ -85,10 +84,14 @@ fn main() -> Result<()> {
             }
         }
 
-        // Only tolerate GitDirNotFound
-        matches!(error, HuskyError::GitDirNotFound(_))
-            .then_some(())
-            .ok_or(error)
+        // Tolerate GitDirNotFound and GitConfigFailed;
+        // the user can always run `husky init` manually later.
+        matches!(
+            error,
+            HuskyError::GitDirNotFound(_) | HuskyError::GitConfigFailed(_)
+        )
+        .then_some(())
+        .ok_or(error)
     })
 }
 
@@ -98,6 +101,9 @@ fn install_hooks() -> Result<()> {
         .parent()
         .ok_or_else(|| HuskyError::GitDirNotFound(git_dir.display().to_string()))?;
     let user_hooks_dir = project_root.join(HUSKY_DIR);
+
+    // Tell Cargo to re-run when user's .husky directory changes
+    println!("cargo:rerun-if-changed={}", user_hooks_dir.display());
 
     if !user_hooks_dir.exists() {
         return Ok(());
@@ -162,22 +168,27 @@ fn find_git_dir() -> Result<PathBuf> {
 
 fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
     start_path.ancestors().find_map(|path| {
-        let git_dir = path.join(".git");
-        if git_dir.is_dir() {
-            Some(git_dir)
-        } else if git_dir.is_file() {
-            read_git_submodule(&git_dir).ok()
+        let git_entry = path.join(".git");
+        if git_entry.is_dir() {
+            Some(git_entry)
+        } else if git_entry.is_file() && is_valid_git_file(&git_entry) {
+            // For submodules/worktrees, .git is a file; return the file path
+            // so that .parent() gives the correct project root.
+            Some(git_entry)
         } else {
             None
         }
     })
 }
 
-fn read_git_submodule(git_file: &Path) -> Result<PathBuf> {
-    let content = fs::read_to_string(git_file)?;
-    let git_dir = PathBuf::from(content.trim_end_matches(['\n', '\r']));
-    if !git_dir.is_dir() {
-        return Err(HuskyError::GitDirNotFound(git_dir.display().to_string()));
-    }
-    Ok(git_dir)
+fn is_valid_git_file(git_file: &Path) -> bool {
+    let parent = git_file.parent().unwrap_or(Path::new("."));
+    fs::read_to_string(git_file)
+        .ok()
+        .and_then(|content| {
+            let line = content.trim_end_matches(['\n', '\r']);
+            line.strip_prefix("gitdir: ").map(PathBuf::from)
+        })
+        .map(|resolved| parent.join(resolved).is_dir())
+        .unwrap_or(false)
 }
