@@ -303,11 +303,20 @@ cargo fmt --check || {
 Before committing your hooks, test them manually:
 
 ```sh
-# Test pre-commit hook
-.git/hooks/pre-commit
+# Test pre-commit hook directly
+.husky/pre-commit
 
 # Test commit-msg hook
-echo "test message" | .git/hooks/commit-msg
+echo "test message" | .husky/commit-msg
+```
+
+Or run the end-to-end verification script that simulates a real project:
+
+```sh
+# From the husky-rs repo:
+./docs/verify.sh
+# Or specify a custom husky-rs path:
+./docs/verify.sh /path/to/husky-rs
 ```
 
 ### Use `set -e` for Safety
