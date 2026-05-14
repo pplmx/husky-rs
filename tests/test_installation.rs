@@ -543,9 +543,11 @@ fn test_hook_triggers_pre_commit() -> Result<(), Error> {
     project.add_husky_rs("dependencies", false)?;
 
     let marker = project.path.join("hook_ran");
+    // Git Bash on Windows needs forward slashes
+    let marker_str = marker.display().to_string().replace('\\', "/");
     project.create_hook(
         "pre-commit",
-        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker.display()),
+        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker_str),
     )?;
     project.build()?;
 
@@ -603,10 +605,11 @@ fn test_hook_triggers_commit_msg() -> Result<(), Error> {
     project.add_husky_rs("dependencies", false)?;
 
     let marker = project.path.join("msg_ran");
+    let marker_str = marker.display().to_string().replace('\\', "/");
     // $1 is the path to the commit message file, not the message itself
     project.create_hook(
         "commit-msg",
-        &format!("#!/bin/sh\ncat \"$1\" > {}\nexit 0\n", marker.display()),
+        &format!("#!/bin/sh\ncat \"$1\" > {}\nexit 0\n", marker_str),
     )?;
     project.build()?;
 
@@ -642,9 +645,10 @@ fn test_hook_triggers_post_commit() -> Result<(), Error> {
     project.add_husky_rs("dependencies", false)?;
 
     let marker = project.path.join("post_ran");
+    let marker_str = marker.display().to_string().replace('\\', "/");
     project.create_hook(
         "post-commit",
-        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker.display()),
+        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker_str),
     )?;
     project.build()?;
 
