@@ -252,9 +252,9 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
                     }
                 }
             }
-            Err(e) if e.to_string().contains("not a directory") || e.to_string().contains("Not a directory") => {
+            Err(e) if e.kind() == io::ErrorKind::NotADirectory => {
                 return Err(HuskyError::Io(io::Error::new(
-                    e.kind(),
+                    io::ErrorKind::NotADirectory,
                     format!(
                         "{} exists but is not a directory; remove it or replace it with a directory",
                         user_hooks_dir.display()
