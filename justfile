@@ -38,12 +38,20 @@ coverage:
 quick: fmt-check clippy doc-check test
 
 # Full CI gate
-ci: fmt-check clippy doc-check msrv-check test
+ci: fmt-check clippy doc-check msrv-check test deny
 
 # Auto-fix clippy + format
 fix:
     cargo clippy --fix --allow-dirty --allow-staged --all-targets --all-features --workspace -- -D warnings
     cargo fmt --all
+
+# Security audit
+audit:
+    cargo audit
+
+# Dependency policy check
+deny:
+    cargo deny check
 
 # Generate documentation
 doc:
