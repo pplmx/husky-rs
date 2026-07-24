@@ -41,7 +41,7 @@ jobs:
                 uses: dtolnay/rust-toolchain@stable
                 with:
                     # NOTE: Keep in sync with rust-version in Cargo.toml
-                    toolchain: "1.78"
+                    toolchain: "1.97"
 
             -   name: Cache Rust dependencies
                 uses: Swatinem/rust-cache@v2
