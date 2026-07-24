@@ -250,20 +250,38 @@ fn assert_prek_config_runs_default_install(prefix: &str, config_name: &str, conf
     let lines: Vec<_> = invocation.lines().collect();
     assert_eq!(
         lines.len(),
-        5,
-        "expected validation followed by installation: {invocation}"
+        7,
+        "expected validate-config, install --git-dir .git (7 log lines): {invocation}"
     );
+    // validate-config: PWD, "validate-config", config-path
     assert_eq!(fs::canonicalize(lines[0])?, fs::canonicalize(&project.path)?);
     assert_eq!(lines[1], "validate-config");
     assert_eq!(
         fs::canonicalize(lines[2])?,
         fs::canonicalize(project.path.join(config_name))?
     );
+    // install --git-dir .git: PWD, "install", "--git-dir", "<path-to-.git>"
     assert_eq!(fs::canonicalize(lines[3])?, fs::canonicalize(&project.path)?);
     assert_eq!(lines[4], "install");
+    assert_eq!(lines[5], "--git-dir");
+    assert_eq!(
+        fs::canonicalize(lines[6])?,
+        fs::canonicalize(project.path.join(".git"))?
+    );
     assert!(
         !project.path.join(".husky").exists(),
         "husky-rs should not create .husky in prek mode"
+    );
+    // prek native mode clears core.hooksPath
+    let hooks_path = std::process::Command::new("git")
+        .args(["config", "core.hooksPath"])
+        .current_dir(&project.path)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    assert!(
+        hooks_path.is_empty(),
+        "core.hooksPath should be cleared in prek native mode, got: {hooks_path}"
     );
 
     Ok(())
@@ -362,7 +380,7 @@ fn test_prek_install_failure_fails_build() -> Result<(), Error> {
     assert!(invocation_log.exists(), "fake prek should have been invoked");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("prek install failed with status"),
+        stderr.contains("prek install --git-dir .git failed with status"),
         "expected actionable prek failure error, got: {stderr}"
     );
 
@@ -539,7 +557,8 @@ repos:
     Ok(())
 }
 
-/// Real prek migrates an existing standalone hook and chains its legacy script.
+/// Real prek installs natively into `.git/hooks/`; an existing standalone `.husky/` hook
+/// is left untouched (no migration — prek no longer manages `.husky/`).
 #[cfg(unix)]
 #[test]
 fn test_real_prek_migrates_standalone_hook() -> Result<(), Error> {
@@ -549,6 +568,7 @@ fn test_real_prek_migrates_standalone_hook() -> Result<(), Error> {
 
     let project = TestProject::new("real-prek-upgrade-")?;
     project.add_husky_rs("dependencies", false)?;
+    // Create a standalone hook in .husky/ — this will be left alone after prek takes over.
     project.create_hook("pre-commit", "#!/bin/sh\ntouch legacy-hook-ran\n")?;
     project.build()?;
     assert!(verify_hook_installed(&project.path, "pre-commit"));
@@ -570,8 +590,22 @@ fn test_real_prek_migrates_standalone_hook() -> Result<(), Error> {
     project.clean()?;
     project.build()?;
 
+    // prek installs natively into .git/hooks/
+    assert!(project.path.join(".git").join("hooks").join("pre-commit").is_file());
+    // Legacy .husky/pre-commit is left untouched (no migration to .legacy)
     assert!(project.path.join(".husky").join("pre-commit").is_file());
-    assert!(project.path.join(".husky").join("pre-commit.legacy").is_file());
+    assert!(!project.path.join(".husky").join("pre-commit.legacy").exists());
+    // core.hooksPath is cleared in prek native mode
+    let hooks_path = std::process::Command::new("git")
+        .args(["config", "core.hooksPath"])
+        .current_dir(&project.path)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    assert!(
+        hooks_path.is_empty(),
+        "core.hooksPath should be cleared, got: {hooks_path}"
+    );
 
     fs::write(project.path.join("tracked.txt"), "content\n")?;
     run_command_success("git", &["add", "tracked.txt"], &project.path)?;
@@ -579,10 +613,6 @@ fn test_real_prek_migrates_standalone_hook() -> Result<(), Error> {
     assert!(
         project.path.join("prek-hook-ran").exists(),
         "configured prek hook should run"
-    );
-    assert!(
-        project.path.join("legacy-hook-ran").exists(),
-        "legacy standalone hook should run"
     );
 
     Ok(())

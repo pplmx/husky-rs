@@ -155,16 +155,6 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
         .output();
     ensure_prek_command_succeeds("prek install --git-dir .git", installation, config_path)?;
 
-    // 4. Remove the stale `.husky/` directory if it exists (cleanup from standalone mode).
-    let husky_dir = project_root.join(HUSKY_DIR);
-    if husky_dir.is_dir() {
-        if let Err(e) = fs::remove_dir_all(&husky_dir) {
-            eprintln!("husky-rs: Could not remove legacy .husky/ directory: {e}");
-        } else {
-            println!("cargo:warning=husky-rs: Removed legacy .husky/ directory");
-        }
-    }
-
     println!("cargo:warning=husky-rs: prek hooks active (native mode — .git/hooks/)");
     Ok(())
 }
