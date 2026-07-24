@@ -69,7 +69,11 @@
 
 If the repository contains `prek.toml`, `.pre-commit-config.yaml`, or
 `.pre-commit-config.yml`, husky-rs delegates hook installation completely to
-[prek](https://github.com/j178/prek), the Rust implementation of pre-commit:
+[prek](https://github.com/j178/prek) in **native mode**:
+
+- Clears `core.hooksPath` (if previously set)
+- Runs `prek install --git-dir .git` → shims go to `.git/hooks/`
+- Pre-existing `.husky/` directories are ignored (left on disk, not used)
 
 ```sh
 cargo install prek
@@ -77,8 +81,7 @@ cargo install prek
 cargo build
 ```
 
-Husky-rs runs `prek install` without forcing hook types, so prek honors
-pre-commit-compatible settings such as:
+Configure hook types via standard prek settings:
 
 ```yaml
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
@@ -88,13 +91,11 @@ repos:
 
 If prek is unavailable, the config is invalid, or installation fails, the
 Cargo build fails with the underlying prek error. Set `NO_HUSKY_HOOKS=1` to
-skip installation explicitly, such as in packaging environments.
+skip installation explicitly.
 
-Existing standalone hooks may be migrated to `*.legacy` and chained by prek.
-Generated prek shims are machine-specific and should not be committed. When no
-supported config exists, husky-rs retains its original standalone `.husky/`
-behavior. See the [usage guide](docs/usage.md#switching-modes) for migration
-steps.
+When no supported prek config exists, husky-rs retains its original standalone
+`.husky/` behavior. See the [usage guide](docs/usage.md#switching-modes) for
+migration steps.
 
 ### Supported Git Hooks
 

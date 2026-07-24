@@ -2,22 +2,135 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.4.0] - 2026-07-24
+
+### 🎯 Highlights
+
+> **prek native mode**: husky-rs now installs prek hooks directly into `.git/hooks/`
+> instead of relying on `.husky/` or `core.hooksPath`. This makes prek-managed
+> projects cleaner and avoids conflicts between husky-rs and prek's own hook
+> management. Standalone `.husky/` mode continues to work exactly as before.
+
+### ⚠️ Breaking Changes
+
+- **MSRV bumped to 1.83** (from 1.78). For most users this requires no action
+  since Rust developers typically use rustup. Users on Debian Bookworm or
+  Ubuntu 24.04 LTS apt packages already needed rustup even for 1.78.
+- **prek mode now clears `core.hooksPath`**. Previously husky-rs called
+  `prek install` which wrote shims to the directory pointed to by
+  `core.hooksPath` (usually `.husky/`). Now husky-rs clears `core.hooksPath`
+  and passes `--git-dir .git` to prek, so hooks are installed natively into
+  `.git/hooks/`. If you had a custom `core.hooksPath`, it will be removed.
+- **prek mode ignores `.husky/`**. When a prek config (`prek.toml`,
+  `.pre-commit-config.yaml`, or `.pre-commit-config.yml`) exists, any existing
+  `.husky/` directory is no longer used. A warning is printed to alert you.
+  Pre-existing `.husky/` files are left untouched on disk but are not executed.
+- **prek required in prek mode**. If a prek config exists but `prek` is not on
+  `PATH`, the build fails with: `config found but prek is not installed; run
+  'cargo install prek'`. Previously this was a soft fallback; now it is a hard
+  error to prevent silently broken hooks.
 
 ### ✨ Added
 
-- Automatically delegate hook installation completely to prek when
-  `prek.toml`, `.pre-commit-config.yaml`, or `.pre-commit-config.yml` exists,
-  while preserving standalone `.husky/` behavior without those configs.
+- **prek native mode**: `prek install --git-dir .git` installs shims directly
+  into `.git/hooks/`. No `.husky/` directory required. No `core.hooksPath`
+  manipulation. Git uses its default hooks directory.
+- **`.husky/` ignored warning**: When a prek config is detected alongside an
+  existing `.husky/` directory, husky-rs prints a clear warning:
+  `prek config detected — .husky/ will be ignored (prek manages hooks via .git/hooks/)`.
+- **`prek.toml` priority**: When both `prek.toml` and `.pre-commit-config.yaml`
+  exist, `prek.toml` takes precedence (matching prek's own behavior).
+- **`default_install_hook_types` support** in `.pre-commit-config.yaml` to
+  control which hook shims prek installs (pre-commit, commit-msg, pre-push).
+- **`default_stages` support** for hooks without explicit `stages:`.
+- **New tests**: `test_prek_toml_takes_priority_over_yaml`,
+  `test_husky_is_file_not_directory_fails_build` (85 tests total, +2).
 
-### ⚠️ Changed
+### 🔧 Changed
 
-- **Breaking:** repositories containing a supported prek configuration now
-  require prek to be installed and the configuration to validate successfully;
-  otherwise Cargo builds fail. Set `NO_HUSKY_HOOKS=1` to skip installation
-  explicitly.
-- Existing standalone hooks may be migrated by prek to `*.legacy` scripts when
-  a supported config is introduced.
+- **prek validate-config runs before any mutation**. Config validation happens
+  first; `core.hooksPath` is only cleared after validation passes, preventing
+  partial state on failure.
+- **Error messages include config path**. Prek failures now report which config
+  file caused the error, e.g.:
+  `prek install --git-dir .git failed with status exit code: 1 (config: .pre-commit-config.yaml): ...`
+- **`.husky/` is a file → clear error**. If `.husky` exists as a regular file
+  instead of a directory, the build fails with:
+  `.husky exists but is not a directory; remove it or replace it with a directory`
+
+### 📦 Dependencies & CI
+
+- **MSRV**: 1.78 → 1.83
+- **GitHub Actions**: `actions/checkout` v6→v7, `codecov/codecov-action` v6→v7
+
+### 📋 Migration Guide
+
+#### From husky-rs 0.3.x standalone mode (no prek config)
+
+No action needed. Standalone `.husky/` mode is unchanged.
+
+#### From husky-rs 0.3.x prek mode (with prek config)
+
+If you were using prek mode in 0.3.x:
+
+1. **Check your `core.hooksPath`**: After upgrading, `core.hooksPath` will be
+   cleared. This is expected — prek now manages hooks in `.git/hooks/` directly.
+
+2. **`.husky/` cleanup (optional)**: If you had `.husky/` from standalone mode,
+   it will be left on disk but ignored. You can safely delete it:
+   ```sh
+   rm -rf .husky/
+   ```
+
+3. **Ensure `default_install_hook_types` is set**: If you need commit-msg or
+   pre-push hooks, add to your prek config:
+   ```yaml
+   default_install_hook_types: [pre-commit, commit-msg, pre-push]
+   ```
+
+4. **Clean rebuild to trigger new behavior**:
+   ```sh
+   cargo clean
+   cargo test   # or cargo build
+   ```
+
+#### From standalone to prek mode (new)
+
+```sh
+cargo install prek
+# Create .pre-commit-config.yaml or prek.toml
+cargo clean
+cargo test
+# .husky/ will be ignored — prek manages .git/hooks/
+```
+
+#### From prek back to standalone
+
+```sh
+prek uninstall --all
+rm .pre-commit-config.yaml prek.toml 2>/dev/null
+cargo clean
+cargo test
+# husky-rs falls back to standalone .husky/ mode
+```
+
+### 🔒 Negative Cases Verified (non-exhaustive)
+
+All tested scenarios fail safely — no bypass found:
+
+| Scenario | Result |
+|----------|--------|
+| `NO_HUSKY_HOOKS=1` | Skips installation entirely |
+| Invalid YAML config | Build fails with parse error |
+| prek not on PATH | Build fails with install guidance |
+| Empty `prek.toml` | Build fails |
+| `.husky/` is a file | Build fails with clear error |
+| `core.hooksPath` tampered | Auto-restored on next build |
+| Broken hook script | Commit blocked by Git |
+| Missing `.husky/` (standalone) | No-op, build succeeds |
+| Delete prek config mid-stream | Falls back to standalone |
+
+---
 
 ## [0.3.3] - 2026-05-14
 
@@ -277,6 +390,8 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ---
 
+[0.4.0]: https://github.com/pplmx/husky-rs/compare/v0.3.3...v0.4.0
+[0.3.3]: https://github.com/pplmx/husky-rs/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/pplmx/husky-rs/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/pplmx/husky-rs/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pplmx/husky-rs/compare/v0.2.2...v0.3.0
