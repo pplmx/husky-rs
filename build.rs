@@ -175,9 +175,17 @@ fn ensure_prek_command_succeeds(command: &str, result: io::Result<Output>, confi
             let stderr = String::from_utf8_lossy(&output.stderr);
             let details = stderr.trim();
             let message = if details.is_empty() {
-                format!("{command} failed with status {}", output.status)
+                format!(
+                    "{command} failed with status {} (config: {})",
+                    output.status,
+                    config_path.display()
+                )
             } else {
-                format!("{command} failed with status {}: {details}", output.status)
+                format!(
+                    "{command} failed with status {} (config: {}): {details}",
+                    output.status,
+                    config_path.display()
+                )
             };
             Err(HuskyError::PrekInstallFailed(message))
         }
@@ -229,17 +237,31 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
 
     #[cfg(unix)]
     {
-        for entry in fs::read_dir(&user_hooks_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&path)?.permissions();
-                if perms.mode() & 0o111 == 0 {
-                    perms.set_mode(perms.mode() | 0o111);
-                    fs::set_permissions(&path, perms)?;
+        match fs::read_dir(&user_hooks_dir) {
+            Ok(entries) => {
+                for entry in entries {
+                    let entry = entry?;
+                    let path = entry.path();
+                    if path.is_file() {
+                        use std::os::unix::fs::PermissionsExt;
+                        let mut perms = fs::metadata(&path)?.permissions();
+                        if perms.mode() & 0o111 == 0 {
+                            perms.set_mode(perms.mode() | 0o111);
+                            fs::set_permissions(&path, perms)?;
+                        }
+                    }
                 }
             }
+            Err(e) if e.to_string().contains("not a directory") || e.to_string().contains("Not a directory") => {
+                return Err(HuskyError::Io(io::Error::new(
+                    e.kind(),
+                    format!(
+                        "{} exists but is not a directory; remove it or replace it with a directory",
+                        user_hooks_dir.display()
+                    ),
+                )));
+            }
+            Err(e) => return Err(HuskyError::Io(e)),
         }
     }
 

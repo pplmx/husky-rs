@@ -380,8 +380,8 @@ fn test_prek_install_failure_fails_build() -> Result<(), Error> {
     assert!(invocation_log.exists(), "fake prek should have been invoked");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("prek install --git-dir .git failed with status"),
-        "expected actionable prek failure error, got: {stderr}"
+        stderr.contains("prek install --git-dir .git failed with status") && stderr.contains("config:"),
+        "expected actionable prek failure error with config path, got: {stderr}"
     );
 
     Ok(())
@@ -1259,6 +1259,74 @@ fn test_install_in_worktree() -> Result<(), Error> {
 
     // Cleanup worktree registration
     let _ = run_command("git", &["worktree", "remove", worktree.to_str().unwrap()], &main_repo);
+
+    Ok(())
+}
+
+// ============================================================================
+// Edge Cases from integration testing
+// ============================================================================
+
+/// When both `prek.toml` and `.pre-commit-config.yaml` exist, `prek.toml` takes
+/// priority (it appears first in the scan order).
+#[test]
+fn test_prek_toml_takes_priority_over_yaml() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-priority-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(
+        project.path.join("prek.toml"),
+        "[[repos]]\nrepo = \"builtin\"\nhooks = [{ id = \"check-toml\" }]\n",
+    )?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", path_with_prepend(&fake_bin)?)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "cargo build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let invocation = fs::read_to_string(&invocation_log)?;
+    let lines: Vec<_> = invocation.lines().collect();
+    // validate-config should be called with prek.toml, not .pre-commit-config.yaml
+    assert_eq!(
+        fs::canonicalize(lines[2])?,
+        fs::canonicalize(project.path.join("prek.toml"))?,
+        "prek.toml should take priority over .pre-commit-config.yaml; invocation: {invocation}"
+    );
+
+    Ok(())
+}
+
+/// When `.husky/` exists as a regular file instead of a directory, the build
+/// fails with a clear, actionable error message.
+#[test]
+fn test_husky_is_file_not_directory_fails_build() -> Result<(), Error> {
+    let project = TestProject::new("husky-file-not-dir-")?;
+    project.add_husky_rs("dependencies", false)?;
+    // Create .husky as a FILE, not a directory.
+    fs::write(project.path.join(".husky"), "not a directory")?;
+
+    let output = project.cargo(&["build"])?;
+    assert!(
+        !output.success,
+        "build should fail when .husky is a file, not a directory"
+    );
+    assert!(
+        output.stderr.contains("Not a directory") || output.stderr.contains("not a directory"),
+        "expected clear error about .husky being a file, got: {}",
+        output.stderr
+    );
 
     Ok(())
 }
