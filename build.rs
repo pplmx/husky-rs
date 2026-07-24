@@ -121,7 +121,16 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
         .output();
     ensure_prek_command_succeeds("prek validate-config", validation, config_path)?;
 
-    // 2. Clear any prior core.hooksPath (e.g. leftover from standalone `.husky` mode).
+    // 2. Warn if .husky/ exists — it will be ignored in prek mode.
+    let husky_dir = project_root.join(HUSKY_DIR);
+    if husky_dir.is_dir() {
+        println!(
+            "cargo:warning=husky-rs: {} detected — .husky/ will be ignored (prek manages hooks via .git/hooks/)",
+            config_path.file_name().unwrap_or_default().to_string_lossy()
+        );
+    }
+
+    // 3. Clear any prior core.hooksPath (e.g. leftover from standalone `.husky` mode).
     //    In prek mode, hooks live natively in `.git/hooks/` — the git default.
     let current_hooks_path = Command::new("git")
         .args(["config", "core.hooksPath"])
@@ -144,7 +153,7 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
         }
     }
 
-    // 3. Install prek hooks natively into `.git/hooks/`.
+    // 4. Install prek hooks natively into `.git/hooks/`.
     let installation = Command::new("prek")
         .arg("install")
         .arg("--git-dir")
