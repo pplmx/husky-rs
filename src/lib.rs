@@ -26,6 +26,16 @@
 //! - Changes to hooks trigger automatic reinstallation (no `cargo clean` needed!)
 //! - Cross-platform support (Unix-like systems and Windows)
 //!
+//! ## prek Compatibility
+//!
+//! When the repository contains `prek.toml`, `.pre-commit-config.yaml`, or
+//! `.pre-commit-config.yml`, the build script delegates installation completely
+//! to `prek install`. This preserves prek and pre-commit configuration
+//! semantics, including `default_install_hook_types`. Without one of these
+//! configs, standalone `.husky/` behavior is preserved. If prek is unavailable
+//! or its configuration is invalid, the build fails unless
+//! `NO_HUSKY_HOOKS` is set.
+//!
 //! ## Skipping Hook Installation
 //!
 //! Set the `NO_HUSKY_HOOKS` environment variable to skip hook installation:
@@ -215,14 +225,8 @@ mod tests {
         // Ensure clean state
         env::remove_var("NO_HUSKY_HOOKS");
         // Give it a moment to ensure var is actually removed
-        assert!(
-            env::var_os("NO_HUSKY_HOOKS").is_none(),
-            "Env var should be None"
-        );
-        assert!(
-            !should_skip_installation(),
-            "Should not skip when env var not set"
-        );
+        assert!(env::var_os("NO_HUSKY_HOOKS").is_none(), "Env var should be None");
+        assert!(!should_skip_installation(), "Should not skip when env var not set");
     }
 
     #[test]

@@ -2,6 +2,40 @@
 
 This guide provides practical examples for using `husky-rs` Git hooks in your Rust projects.
 
+## prek-compatible Configuration
+
+To reuse a pre-commit YAML config or native `prek.toml`, install prek and add
+husky-rs. A subsequent Cargo build delegates hook installation completely to
+prek.
+
+```yaml
+default_install_hook_types: [pre-commit, pre-push]
+repos:
+  - repo: builtin
+    hooks:
+      - id: trailing-whitespace
+      - id: check-yaml
+```
+
+The equivalent native `prek.toml` format is:
+
+```toml
+default_install_hook_types = ["pre-commit", "pre-push"]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "check-yaml" },
+]
+```
+
+```sh
+cargo install prek
+cargo add --dev husky-rs
+cargo test
+```
+
 ## Basic Examples
 
 ### Example 1: Running Tests Before Commit

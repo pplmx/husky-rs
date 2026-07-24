@@ -1,41 +1,45 @@
 //! Build script for husky-rs
 //!
-//! This build script automatically configures Git to use hooks from `.husky/`
-//! by setting `core.hooksPath`.
+//! Automatically configures Git hooks. Supports two modes:
 //!
-//! ## How it works
+//! ## Mode 1 — standalone (no prek-supported config)
 //!
-//! 1. Checks for the `NO_HUSKY_HOOKS` environment variable to skip installation
-//! 2. Locates the `.git` directory
-//! 3. Checks if `.husky/` exists
-//! 4. Sets `git config core.hooksPath .husky`
-//! 5. Ensures files in `.husky/` are executable (Unix-like systems)
+//! Husky-rs sets `core.hooksPath` to `.husky/`. Users create and manage
+//! their own hook scripts there. Hooks are made executable on install.
+//!
+//! ## Mode 2 — prek integration
+//!
+//! Husky-rs detects `prek.toml`, `.pre-commit-config.yaml`, or
+//! `.pre-commit-config.yml` and delegates hook management completely to prek.
+//! If `prek` is available on PATH, `prek install` is run automatically using
+//! prek's configuration-compatible hook type defaults.
+//!
+//! If prek is unavailable, the config is invalid, or installation fails, the
+//! build fails. Set `NO_HUSKY_HOOKS` to skip hook installation explicitly.
 
 use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{self, Command, Output, Stdio};
 
 #[derive(Debug)]
 enum HuskyError {
     GitDirNotFound(String),
     Io(io::Error),
-    Env(env::VarError),
     GitConfigFailed(String),
+    PrekInstallFailed(String),
 }
 
 impl std::fmt::Display for HuskyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HuskyError::GitDirNotFound(path) => write!(
-                f,
-                "Git directory not found in '{}' or its parent directories",
-                path
-            ),
-            HuskyError::Io(err) => write!(f, "IO error: {}", err),
-            HuskyError::Env(err) => write!(f, "Environment variable error: {}", err),
-            HuskyError::GitConfigFailed(err) => write!(f, "Git config failed: {}", err),
+            HuskyError::GitDirNotFound(path) => {
+                write!(f, "Git directory not found in '{path}' or its parent directories")
+            }
+            HuskyError::Io(err) => write!(f, "IO error: {err}"),
+            HuskyError::GitConfigFailed(err) => write!(f, "Git config failed: {err}"),
+            HuskyError::PrekInstallFailed(err) => write!(f, "prek installation failed: {err}"),
         }
     }
 }
@@ -48,50 +52,35 @@ impl From<io::Error> for HuskyError {
     }
 }
 
-impl From<env::VarError> for HuskyError {
-    fn from(err: env::VarError) -> Self {
-        HuskyError::Env(err)
-    }
-}
-
 type Result<T> = std::result::Result<T, HuskyError>;
 
 const HUSKY_DIR: &str = ".husky";
+const PREK_CONFIGS: &[&str] = &["prek.toml", ".pre-commit-config.yaml", ".pre-commit-config.yml"];
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("husky-rs: {error}");
+        process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     println!("cargo:rerun-if-env-changed=NO_HUSKY_HOOKS");
 
     if env::var_os("NO_HUSKY_HOOKS").is_some() {
         return Ok(());
     }
 
-    install_hooks().or_else(|error| {
-        match &error {
-            HuskyError::GitDirNotFound(path) => {
-                eprintln!(
-                    "husky-rs: Unable to find .git directory starting from: {}",
-                    path
-                );
-            }
-            HuskyError::GitConfigFailed(e) => {
-                eprintln!("husky-rs: Failed to set git config: {}", e);
-            }
-            HuskyError::Io(e) => {
-                eprintln!("husky-rs: I/O error during hook installation: {}", e);
-            }
-            HuskyError::Env(e) => {
-                eprintln!("husky-rs: Environment variable error: {}", e);
-            }
+    install_hooks().or_else(|error| match error {
+        HuskyError::GitDirNotFound(path) => {
+            eprintln!("husky-rs: Unable to find .git directory starting from: {path}");
+            Ok(())
         }
-
-        // Tolerate GitDirNotFound and GitConfigFailed;
-        // the user can always run `husky init` manually later.
-        matches!(
-            error,
-            HuskyError::GitDirNotFound(_) | HuskyError::GitConfigFailed(_)
-        )
-        .then_some(())
-        .ok_or(error)
+        HuskyError::GitConfigFailed(error) => {
+            eprintln!("husky-rs: Failed to set git config: {error}");
+            Ok(())
+        }
+        error @ (HuskyError::Io(_) | HuskyError::PrekInstallFailed(_)) => Err(error),
     })
 }
 
@@ -100,10 +89,75 @@ fn install_hooks() -> Result<()> {
     let project_root = git_dir
         .parent()
         .ok_or_else(|| HuskyError::GitDirNotFound(git_dir.display().to_string()))?;
-    let user_hooks_dir = project_root.join(HUSKY_DIR);
 
-    // Tell Cargo to re-run when user's .husky directory changes
-    println!("cargo:rerun-if-changed={}", user_hooks_dir.display());
+    let user_hooks_dir = project_root.join(HUSKY_DIR);
+    let prek_config = PREK_CONFIGS
+        .iter()
+        .map(|config| project_root.join(config))
+        .find(|config| config.is_file());
+
+    if let Some(prek_config) = prek_config {
+        println!("cargo:rerun-if-changed={}", prek_config.display());
+        install_prek_mode(project_root, &prek_config)
+    } else {
+        println!("cargo:rerun-if-changed={}", user_hooks_dir.display());
+        install_standalone_mode(project_root)
+    }
+}
+
+/// Mode 2: prek integration.
+///
+/// When a prek-supported config exists, delegate everything to prek.
+/// `prek install` is idempotent — it only writes hooks when needed.
+/// prek manages core.hooksPath, hook scripts, and legacy migration.
+fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
+    let validation = Command::new("prek")
+        .arg("validate-config")
+        .arg(config_path)
+        .current_dir(project_root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .output();
+    ensure_prek_command_succeeds("prek validate-config", validation, config_path)?;
+
+    let installation = Command::new("prek")
+        .arg("install")
+        .current_dir(project_root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .output();
+    ensure_prek_command_succeeds("prek install", installation, config_path)?;
+
+    println!("cargo:warning=husky-rs: prek hooks active (via prek install)");
+    Ok(())
+}
+
+fn ensure_prek_command_succeeds(command: &str, result: io::Result<Output>, config_path: &Path) -> Result<()> {
+    match result {
+        Ok(output) if output.status.success() => Ok(()),
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let details = stderr.trim();
+            let message = if details.is_empty() {
+                format!("{command} failed with status {}", output.status)
+            } else {
+                format!("{command} failed with status {}: {details}", output.status)
+            };
+            Err(HuskyError::PrekInstallFailed(message))
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Err(HuskyError::PrekInstallFailed(format!(
+            "{} found but prek is not installed; run `cargo install prek`",
+            config_path.display()
+        ))),
+        Err(error) => Err(HuskyError::PrekInstallFailed(format!(
+            "failed to execute prek: {error}"
+        ))),
+    }
+}
+
+/// Mode 1: standalone — set core.hooksPath to .husky.
+fn install_standalone_mode(project_root: &Path) -> Result<()> {
+    let user_hooks_dir = project_root.join(HUSKY_DIR);
 
     if !user_hooks_dir.exists() {
         return Ok(());
@@ -137,7 +191,6 @@ fn install_hooks() -> Result<()> {
         println!("cargo:warning=husky-rs: Configured core.hooksPath to .husky");
     }
 
-    // Ensure all files in .husky are executable on Unix
     #[cfg(unix)]
     {
         for entry in fs::read_dir(&user_hooks_dir)? {
@@ -162,18 +215,14 @@ fn find_git_dir() -> Result<PathBuf> {
         .map(PathBuf::from)
         .unwrap_or_else(|_| env::current_dir().expect("Failed to get current directory"));
 
-    find_git_dir_from_path(&start_dir)
-        .ok_or_else(|| HuskyError::GitDirNotFound(start_dir.display().to_string()))
+    find_git_dir_from_path(&start_dir).ok_or_else(|| HuskyError::GitDirNotFound(start_dir.display().to_string()))
 }
 
 fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
     start_path.ancestors().find_map(|path| {
         let git_entry = path.join(".git");
-        if git_entry.is_dir() {
-            Some(git_entry)
-        } else if git_entry.is_file() && is_valid_git_file(&git_entry) {
-            // For submodules/worktrees, .git is a file; return the file path
-            // so that .parent() gives the correct project root.
+        // Keep the .git file path for worktrees/submodules so its parent remains the project root.
+        if git_entry.is_dir() || (git_entry.is_file() && is_valid_git_file(&git_entry)) {
             Some(git_entry)
         } else {
             None

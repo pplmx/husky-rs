@@ -17,14 +17,14 @@ fi
 
 run_check \
     "🔧 Checking code formatting..." \
-    "cargo fmt --all -- --check" \
+    "cargo fmt --all --check" \
     "Code is not formatted" \
     "cargo fmt --all" \
 || exit 1
 
 run_check \
     "🔍 Running Clippy linter..." \
-    "cargo clippy --workspace --all-targets --all-features -- -D warnings" \
+    "cargo clippy --all-targets --all-features --workspace -- -D warnings" \
     "Clippy found issues" \
     "cargo clippy --fix --workspace --all-targets --all-features --allow-dirty --allow-staged" \
 || exit 1
@@ -34,6 +34,13 @@ run_check \
     "cargo check --workspace --all-targets --all-features" \
     "Compilation failed" \
     "cargo fix --workspace --all-targets --all-features --allow-dirty --allow-staged" \
+|| exit 1
+
+run_check \
+    "📚 Checking documentation warnings..." \
+    "RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items --all-features --workspace" \
+    "Documentation check failed" \
+    "Fix documentation warnings in source" \
 || exit 1
 
 run_check \

@@ -13,6 +13,7 @@
 - 🚀 **Zero-configuration** - Just add the dependency and create hooks
 - ⚡ **Automatic installation** - Hooks configure on `cargo build` or `cargo test`
 - 🔄 **Smart rerun detection** - No need for `cargo clean` when updating hooks
+- 🦀 **prek integration** - Supports `prek.toml` and pre-commit YAML configs
 - 🎯 **All 27 Git hooks supported** - Client-side and server-side hooks
 - 🌍 **Cross-platform** - Works on Unix-like systems and Windows
 - 🛠️ **Optional CLI tool** - `husky init`, `husky add`, `husky list` commands
@@ -64,9 +65,40 @@
 
 ## Usage
 
+### prek Compatibility
+
+If the repository contains `prek.toml`, `.pre-commit-config.yaml`, or
+`.pre-commit-config.yml`, husky-rs delegates hook installation completely to
+[prek](https://github.com/j178/prek), the Rust implementation of pre-commit:
+
+```sh
+cargo install prek
+# Or, if cargo-binstall is available: cargo binstall prek
+cargo build
+```
+
+Husky-rs runs `prek install` without forcing hook types, so prek honors
+pre-commit-compatible settings such as:
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+repos:
+  # ...
+```
+
+If prek is unavailable, the config is invalid, or installation fails, the
+Cargo build fails with the underlying prek error. Set `NO_HUSKY_HOOKS=1` to
+skip installation explicitly, such as in packaging environments.
+
+Existing standalone hooks may be migrated to `*.legacy` and chained by prek.
+Generated prek shims are machine-specific and should not be committed. When no
+supported config exists, husky-rs retains its original standalone `.husky/`
+behavior. See the [usage guide](docs/usage.md#switching-modes) for migration
+steps.
+
 ### Supported Git Hooks
 
-`husky-rs` supports all standard Git hooks by setting `core.hooksPath` to `.husky`. This means you can also place helper scripts (e.g., `.husky/_helpers.sh`) in the same directory and source them from your hooks.
+In standalone mode, `husky-rs` supports all standard Git hooks by setting `core.hooksPath` to `.husky`. This means you can also place helper scripts (e.g., `.husky/_helpers.sh`) in the same directory and source them from your hooks.
 
 For a complete list, refer to the [Git documentation](https://git-scm.com/docs/githooks).
 

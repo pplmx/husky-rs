@@ -3,8 +3,8 @@
 mod common;
 
 use common::{
-    add_husky_dependency, create_temp_dir, get_husky_rs_path, run_command, run_command_success,
-    run_husky, verify_hook_installed,
+    add_husky_dependency, create_temp_dir, get_husky_rs_path, run_command, run_command_success, run_husky,
+    verify_hook_installed,
 };
 use std::fs;
 

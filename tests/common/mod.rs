@@ -88,10 +88,7 @@ impl Drop for TempDir {
 /// Prefers the parent directory of the current crate for better cleanup,
 /// falls back to system temp directory.
 pub fn create_temp_dir(prefix: &str) -> Result<TempDir, Error> {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
     // Try parent directory of current crate first
     let current_crate_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -188,10 +185,7 @@ pub fn add_husky_dependency(cargo_toml_path: &Path, husky_path: &Path) -> Result
     let dep_line = format!(r#"husky-rs = {{ path = {:?} }}"#, husky_path);
 
     if let Some(pos) = content.find("[dependencies]") {
-        let insert_pos = content[pos..]
-            .find('\n')
-            .map(|p| p + pos + 1)
-            .unwrap_or(content.len());
+        let insert_pos = content[pos..].find('\n').map(|p| p + pos + 1).unwrap_or(content.len());
         content.insert_str(insert_pos, &format!("{}\n", dep_line));
     } else {
         content.push_str(&format!("\n[dependencies]\n{}\n", dep_line));
@@ -218,10 +212,7 @@ pub fn add_husky_dependency_with_options(
     let dep_line = format!("husky-rs = {{ path = {:?} }}\n", husky_path);
 
     if let Some(pos) = content.find(&section) {
-        let insert_pos = content[pos..]
-            .find('\n')
-            .map(|p| p + pos + 1)
-            .unwrap_or(content.len());
+        let insert_pos = content[pos..].find('\n').map(|p| p + pos + 1).unwrap_or(content.len());
         content.insert_str(insert_pos, &dep_line);
     } else {
         content.push_str(&format!("\n{}\n{}", section, dep_line));
@@ -277,8 +268,8 @@ pub fn assert_hook_installed(project_path: &Path, hook_name: &str) {
 
 /// Assert that a hook contains specific content.
 pub fn assert_hook_contains(project_path: &Path, hook_name: &str, expected: &str) {
-    let content = get_hook_content(project_path, hook_name)
-        .unwrap_or_else(|_| panic!("Hook '{}' should exist", hook_name));
+    let content =
+        get_hook_content(project_path, hook_name).unwrap_or_else(|_| panic!("Hook '{}' should exist", hook_name));
     assert!(
         content.contains(expected),
         "Hook '{}' should contain '{}'\nActual:\n{}",
@@ -317,23 +308,14 @@ impl TestProject {
     fn init(&self) -> Result<(), Error> {
         run_command_success("cargo", &["init", "--bin"], &self.path)?;
         run_command_success("git", &["init"], &self.path)?;
-        run_command_success(
-            "git",
-            &["config", "user.email", "test@test.com"],
-            &self.path,
-        )?;
+        run_command_success("git", &["config", "user.email", "test@test.com"], &self.path)?;
         run_command_success("git", &["config", "user.name", "Test"], &self.path)?;
         Ok(())
     }
 
     /// Add husky-rs as a dependency.
     pub fn add_husky_rs(&self, dep_type: &str, use_abs_path: bool) -> Result<(), Error> {
-        add_husky_dependency_with_options(
-            &self.path.join("Cargo.toml"),
-            &self.path,
-            dep_type,
-            use_abs_path,
-        )
+        add_husky_dependency_with_options(&self.path.join("Cargo.toml"), &self.path, dep_type, use_abs_path)
     }
 
     /// Create hooks using the default template.
@@ -357,10 +339,7 @@ impl TestProject {
         if output.success {
             Ok(())
         } else {
-            Err(Error::other(format!(
-                "cargo build failed: {}",
-                output.stderr
-            )))
+            Err(Error::other(format!("cargo build failed: {}", output.stderr)))
         }
     }
 
@@ -370,10 +349,7 @@ impl TestProject {
         if output.success {
             Ok(())
         } else {
-            Err(Error::other(format!(
-                "cargo test failed: {}",
-                output.stderr
-            )))
+            Err(Error::other(format!("cargo test failed: {}", output.stderr)))
         }
     }
 
@@ -427,10 +403,7 @@ impl TestProject {
 pub fn validate_shell_syntax(script: &str) -> Result<(), String> {
     let temp_file = format!(
         "/tmp/husky_validate_{}.sh",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
     );
 
     if let Err(e) = fs::write(&temp_file, script) {
@@ -442,10 +415,7 @@ pub fn validate_shell_syntax(script: &str) -> Result<(), String> {
 
     match output {
         Ok(out) if out.status.success() => Ok(()),
-        Ok(out) => Err(format!(
-            "Shell syntax error: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )),
+        Ok(out) => Err(format!("Shell syntax error: {}", String::from_utf8_lossy(&out.stderr))),
         Err(e) => Err(format!("Failed to run sh: {}", e)),
     }
 }

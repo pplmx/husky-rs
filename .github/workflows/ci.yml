@@ -68,6 +68,29 @@ jobs:
             -   name: Run tests
                 run: cargo test --all-features --workspace
 
+    prek-e2e:
+        needs: [ lint, msrv ]
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v6
+
+            -   name: Install Rust toolchain
+                uses: dtolnay/rust-toolchain@stable
+
+            -   name: Cache Rust dependencies
+                uses: Swatinem/rust-cache@v2
+
+            -   name: Install prek
+                uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2
+                with:
+                    install-only: true
+                    prek-version: 0.4.10
+
+            -   name: Run real prek integration tests
+                env:
+                    PREK_E2E: "1"
+                run: cargo test --test test_installation test_real_prek_
+
     deny:
         name: cargo-deny
         runs-on: ubuntu-latest

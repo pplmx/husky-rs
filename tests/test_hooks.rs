@@ -5,11 +5,37 @@
 mod common;
 
 use common::{validate_shell_syntax, TestProject};
+use std::fs;
 use std::io::Error;
+use std::path::Path;
 
 // ============================================================================
 // Hook Content Tests
 // ============================================================================
+
+/// Project pre-commit hook mirrors every command in the CI lint job.
+#[test]
+fn test_project_pre_commit_matches_ci_lint() -> Result<(), Error> {
+    let hook_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(".husky").join("pre-commit");
+    let hook = fs::read_to_string(hook_path)?;
+
+    #[cfg(unix)]
+    validate_shell_syntax(&hook).map_err(Error::other)?;
+
+    // Exact matching intentionally detects drift from the CI lint commands.
+    for command in [
+        "cargo fmt --all --check",
+        "cargo clippy --all-targets --all-features --workspace -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items --all-features --workspace",
+    ] {
+        assert!(
+            hook.contains(command),
+            "pre-commit hook should run CI lint command: {command}"
+        );
+    }
+
+    Ok(())
+}
 
 /// Hook running cargo test.
 #[test]

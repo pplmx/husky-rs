@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### ✨ Added
+
+- Automatically delegate hook installation completely to prek when
+  `prek.toml`, `.pre-commit-config.yaml`, or `.pre-commit-config.yml` exists,
+  while preserving standalone `.husky/` behavior without those configs.
+
+### ⚠️ Changed
+
+- **Breaking:** repositories containing a supported prek configuration now
+  require prek to be installed and the configuration to validate successfully;
+  otherwise Cargo builds fail. Set `NO_HUSKY_HOOKS=1` to skip installation
+  explicitly.
+- Existing standalone hooks may be migrated by prek to `*.legacy` scripts when
+  a supported config is introduced.
+
 ## [0.3.3] - 2026-05-14
 
 ### 🐛 Bug Fixes

@@ -10,11 +10,151 @@
 mod common;
 
 use common::{
-    add_husky_dependency, create_hook, create_temp_dir, get_hook_content, get_husky_rs_path,
-    run_command, run_command_success, verify_hook_installed, TestProject, HOOK_TYPES,
+    add_husky_dependency, create_hook, create_temp_dir, get_hook_content, get_husky_rs_path, run_command,
+    run_command_success, verify_hook_installed, TestProject, HOOK_TYPES,
 };
+use std::env;
 use std::fs;
 use std::io::Error;
+
+fn path_with_prepend(directory: &std::path::Path) -> Result<std::ffi::OsString, Error> {
+    let current_path = env::var_os("PATH").unwrap_or_default();
+    env::join_paths(std::iter::once(directory.to_path_buf()).chain(env::split_paths(&current_path)))
+        .map_err(Error::other)
+}
+
+fn create_fake_prek(directory: &std::path::Path, exit_code: i32) -> Result<(), Error> {
+    fs::create_dir_all(directory)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let executable = directory.join("prek");
+        fs::write(
+            &executable,
+            format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$PWD\" \"$@\" >> \"$PREK_INVOCATION_LOG\"\n\
+                 [ \"$1\" = \"validate-config\" ] && exit 0\nexit {exit_code}\n"
+            ),
+        )?;
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;
+    }
+
+    #[cfg(windows)]
+    {
+        let source = directory.join("fake_prek.rs");
+        fs::write(
+            &source,
+            format!(
+                r#"use std::env;
+use std::fs::OpenOptions;
+use std::io::Write;
+
+fn main() {{
+    let args: Vec<_> = env::args().skip(1).collect();
+    let mut lines = vec![env::current_dir().unwrap().display().to_string()];
+    lines.extend(args.iter().cloned());
+    let mut log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(env::var_os("PREK_INVOCATION_LOG").unwrap())
+        .unwrap();
+    writeln!(log, "{{}}", lines.join("\n")).unwrap();
+    if args.first().map(String::as_str) == Some("validate-config") {{
+        std::process::exit(0);
+    }}
+    std::process::exit({exit_code});
+}}
+"#
+            ),
+        )?;
+        run_command_success(
+            "rustc",
+            &[
+                source.to_str().unwrap(),
+                "-o",
+                directory.join("prek.exe").to_str().unwrap(),
+            ],
+            directory,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn create_failing_git(directory: &std::path::Path) -> Result<(), Error> {
+    fs::create_dir_all(directory)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let executable = directory.join("git");
+        fs::write(&executable, "#!/bin/sh\nexit 1\n")?;
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))?;
+    }
+
+    #[cfg(windows)]
+    {
+        let source = directory.join("fake_git.rs");
+        fs::write(&source, "fn main() { std::process::exit(1); }\n")?;
+        run_command_success(
+            "rustc",
+            &[
+                source.to_str().unwrap(),
+                "-o",
+                directory.join("git.exe").to_str().unwrap(),
+            ],
+            directory,
+        )?;
+    }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn write_executable(path: &std::path::Path, content: &str) -> Result<(), Error> {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::write(path, content)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+}
+
+fn real_prek_e2e_enabled() -> bool {
+    env::var_os("PREK_E2E").is_some()
+}
+
+#[cfg(unix)]
+fn path_without_prek(project_path: &std::path::Path) -> Result<(std::ffi::OsString, std::path::PathBuf), Error> {
+    use std::os::unix::fs::symlink;
+
+    let current_path = env::var_os("PATH").unwrap_or_default();
+    let path_entries: Vec<_> = env::split_paths(&current_path).collect();
+    let tool_bin = project_path.join("tool-bin");
+    fs::create_dir_all(&tool_bin)?;
+
+    // Preserve Rust tools if prek was installed into the same directory as Cargo.
+    for tool in ["cargo", "rustc"] {
+        let executable = path_entries
+            .iter()
+            .map(|directory| directory.join(tool))
+            .find(|candidate| candidate.is_file())
+            .ok_or_else(|| Error::other(format!("{tool} not found on PATH")))?;
+        symlink(fs::canonicalize(executable)?, tool_bin.join(tool))?;
+    }
+
+    let path = env::join_paths(
+        std::iter::once(tool_bin.clone()).chain(
+            path_entries
+                .into_iter()
+                .filter(|directory| !directory.join("prek").exists()),
+        ),
+    )
+    .map_err(Error::other)?;
+
+    Ok((path, tool_bin))
+}
 
 // ============================================================================
 // Basic Installation
@@ -84,6 +224,432 @@ fn test_install_with_dev_dep_build_skips() -> Result<(), Error> {
 // Environment Variables
 // ============================================================================
 
+fn assert_prek_config_runs_default_install(prefix: &str, config_name: &str, config: &str) -> Result<(), Error> {
+    let project = TestProject::new(prefix)?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(config_name), config)?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", path_with_prepend(&fake_bin)?)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "cargo build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let invocation = fs::read_to_string(&invocation_log)?;
+    let lines: Vec<_> = invocation.lines().collect();
+    assert_eq!(
+        lines.len(),
+        5,
+        "expected validation followed by installation: {invocation}"
+    );
+    assert_eq!(fs::canonicalize(lines[0])?, fs::canonicalize(&project.path)?);
+    assert_eq!(lines[1], "validate-config");
+    assert_eq!(
+        fs::canonicalize(lines[2])?,
+        fs::canonicalize(project.path.join(config_name))?
+    );
+    assert_eq!(fs::canonicalize(lines[3])?, fs::canonicalize(&project.path)?);
+    assert_eq!(lines[4], "install");
+    assert!(
+        !project.path.join(".husky").exists(),
+        "husky-rs should not create .husky in prek mode"
+    );
+
+    Ok(())
+}
+
+/// A pre-commit YAML config delegates installation to prek.
+#[test]
+fn test_pre_commit_yaml_runs_default_install() -> Result<(), Error> {
+    assert_prek_config_runs_default_install("install-prek-yaml-", ".pre-commit-config.yaml", "repos: []\n")
+}
+
+/// A pre-commit YML config delegates installation to prek.
+#[test]
+fn test_pre_commit_yml_runs_default_install() -> Result<(), Error> {
+    assert_prek_config_runs_default_install("install-prek-yml-", ".pre-commit-config.yml", "repos: []\n")
+}
+
+/// A native prek TOML config delegates installation to prek.
+#[test]
+fn test_prek_toml_runs_default_install() -> Result<(), Error> {
+    assert_prek_config_runs_default_install(
+        "install-prek-toml-",
+        "prek.toml",
+        "[[repos]]\nrepo = \"builtin\"\nhooks = [{ id = \"check-toml\" }]\n",
+    )
+}
+
+/// A prek config takes over hook management even when .husky already exists.
+#[test]
+fn test_prek_config_takes_over_existing_husky_mode() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-coexist-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hook("pre-commit", "#!/bin/sh\necho 'standalone'\n")?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", path_with_prepend(&fake_bin)?)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "cargo build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(invocation_log.exists(), "prek config should select prek mode");
+    assert!(!verify_hook_installed(&project.path, "pre-commit"));
+    assert!(project.get_hook_content("pre-commit")?.contains("standalone"));
+
+    Ok(())
+}
+
+/// Stable standalone inputs keep the husky-rs build script cached.
+#[test]
+fn test_standalone_mode_is_cached() -> Result<(), Error> {
+    let project = TestProject::new("install-standalone-cache-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hook("pre-commit", "#!/bin/sh\necho 'standalone'\n")?;
+    project.build()?;
+
+    let second = project.cargo(&["build", "-vv"])?;
+    assert!(second.success, "second cargo build failed: {}", second.stderr);
+    assert!(
+        !second.stderr.contains("Dirty husky-rs"),
+        "unchanged standalone inputs should not rerun husky-rs build.rs"
+    );
+
+    Ok(())
+}
+
+/// A prek execution failure stops the Cargo build with an actionable error.
+#[test]
+fn test_prek_install_failure_fails_build() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-fail-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 42)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", path_with_prepend(&fake_bin)?)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+
+    assert!(!output.status.success(), "prek failure should fail cargo build");
+    assert!(invocation_log.exists(), "fake prek should have been invoked");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("prek install failed with status"),
+        "expected actionable prek failure error, got: {stderr}"
+    );
+
+    Ok(())
+}
+
+/// A missing prek executable stops the build with installation guidance.
+#[cfg(unix)]
+#[test]
+fn test_prek_missing_fails_build() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-missing-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let (path_without_prek, _) = path_without_prek(&project.path)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", path_without_prek)
+        .output()?;
+
+    assert!(!output.status.success(), "missing prek should fail cargo build");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cargo install prek"),
+        "expected prek installation guidance, got: {stderr}"
+    );
+
+    Ok(())
+}
+
+/// NO_HUSKY_HOOKS explicitly skips required prek installation.
+#[test]
+fn test_prek_install_skipped_with_env_var() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-skip-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("NO_HUSKY_HOOKS", "1")
+        .env("PATH", path_with_prepend(&fake_bin)?)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+
+    assert!(
+        output.status.success(),
+        "explicit skip should keep cargo build successful"
+    );
+    assert!(
+        !invocation_log.exists(),
+        "prek should not run when NO_HUSKY_HOOKS is set"
+    );
+
+    Ok(())
+}
+
+/// A failed build retries successfully after prek appears on the same PATH.
+#[cfg(unix)]
+#[test]
+fn test_prek_install_retries_after_binary_appears() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-retry-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let (path, tool_bin) = path_without_prek(&project.path)?;
+    let invocation_log = project.path.join("prek-invocation.log");
+
+    let first = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .output()?;
+    assert!(!first.status.success(), "build should fail before prek is installed");
+
+    create_fake_prek(&tool_bin, 0)?;
+    let second = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+    assert!(second.status.success(), "build should retry after prek is installed");
+    assert!(invocation_log.exists(), "newly installed prek should run");
+
+    Ok(())
+}
+
+/// Stable prek inputs keep the husky-rs build script cached.
+#[test]
+fn test_prek_mode_is_cached() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-cache-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+    let path = path_with_prepend(&fake_bin)?;
+
+    let first = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+    assert!(first.status.success(), "first cargo build failed");
+    assert!(invocation_log.exists(), "first prek executable should run");
+    fs::remove_file(&invocation_log)?;
+
+    let second = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+    assert!(second.status.success(), "second cargo build failed");
+    assert!(
+        !invocation_log.exists(),
+        "unchanged prek inputs should not rerun husky-rs build.rs"
+    );
+
+    Ok(())
+}
+
+/// Real prek installs configured hook types and runs a local pre-commit hook.
+#[cfg(unix)]
+#[test]
+fn test_real_prek_new_project_installs_and_runs_hooks() -> Result<(), Error> {
+    if !real_prek_e2e_enabled() {
+        return Ok(());
+    }
+
+    let project = TestProject::new("real-prek-new-")?;
+    project.add_husky_rs("dependencies", false)?;
+    write_executable(&project.path.join("prek-marker.sh"), "#!/bin/sh\ntouch prek-hook-ran\n")?;
+    fs::write(
+        project.path.join(".pre-commit-config.yaml"),
+        r#"default_install_hook_types: [pre-commit, commit-msg, pre-push]
+repos:
+  - repo: local
+    hooks:
+      - id: prek-marker
+        name: prek marker
+        entry: ./prek-marker.sh
+        language: system
+        pass_filenames: false
+"#,
+    )?;
+
+    project.build()?;
+
+    for hook_type in ["pre-commit", "commit-msg", "pre-push"] {
+        assert!(
+            project.path.join(".git").join("hooks").join(hook_type).is_file(),
+            "real prek should install the {hook_type} shim"
+        );
+    }
+
+    fs::write(project.path.join("tracked.txt"), "content\n")?;
+    run_command_success("git", &["add", "tracked.txt"], &project.path)?;
+    run_command_success("git", &["commit", "-m", "test: real prek hook"], &project.path)?;
+    assert!(
+        project.path.join("prek-hook-ran").exists(),
+        "real prek hook should run during git commit"
+    );
+
+    Ok(())
+}
+
+/// Real prek migrates an existing standalone hook and chains its legacy script.
+#[cfg(unix)]
+#[test]
+fn test_real_prek_migrates_standalone_hook() -> Result<(), Error> {
+    if !real_prek_e2e_enabled() {
+        return Ok(());
+    }
+
+    let project = TestProject::new("real-prek-upgrade-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hook("pre-commit", "#!/bin/sh\ntouch legacy-hook-ran\n")?;
+    project.build()?;
+    assert!(verify_hook_installed(&project.path, "pre-commit"));
+
+    write_executable(&project.path.join("prek-marker.sh"), "#!/bin/sh\ntouch prek-hook-ran\n")?;
+    fs::write(
+        project.path.join(".pre-commit-config.yaml"),
+        r#"repos:
+  - repo: local
+    hooks:
+      - id: prek-marker
+        name: prek marker
+        entry: ./prek-marker.sh
+        language: system
+        pass_filenames: false
+"#,
+    )?;
+
+    project.clean()?;
+    project.build()?;
+
+    assert!(project.path.join(".husky").join("pre-commit").is_file());
+    assert!(project.path.join(".husky").join("pre-commit.legacy").is_file());
+
+    fs::write(project.path.join("tracked.txt"), "content\n")?;
+    run_command_success("git", &["add", "tracked.txt"], &project.path)?;
+    run_command_success("git", &["commit", "-m", "test: prek migration"], &project.path)?;
+    assert!(
+        project.path.join("prek-hook-ran").exists(),
+        "configured prek hook should run"
+    );
+    assert!(
+        project.path.join("legacy-hook-ran").exists(),
+        "legacy standalone hook should run"
+    );
+
+    Ok(())
+}
+
+/// Real prek config errors fail the Cargo build instead of leaving hooks absent.
+#[cfg(unix)]
+#[test]
+fn test_real_prek_invalid_config_fails_build() -> Result<(), Error> {
+    if !real_prek_e2e_enabled() {
+        return Ok(());
+    }
+
+    let project = TestProject::new("real-prek-invalid-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: [\n")?;
+
+    let output = project.cargo(&["build"])?;
+    assert!(!output.success, "invalid prek config should fail cargo build");
+    assert!(
+        output.stderr.contains("prek installation failed"),
+        "expected prek failure details, got: {}",
+        output.stderr
+    );
+
+    Ok(())
+}
+
+/// Real prek refuses an external global hooksPath and propagates the failure.
+#[cfg(unix)]
+#[test]
+fn test_real_prek_global_hooks_path_fails_build() -> Result<(), Error> {
+    if !real_prek_e2e_enabled() {
+        return Ok(());
+    }
+
+    let project = TestProject::new("real-prek-global-hooks-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let global_hooks = project.path.join("global-hooks");
+    let global_config = project.path.join("global.gitconfig");
+    fs::write(
+        &global_config,
+        format!("[core]\n\thooksPath = {}\n", global_hooks.display()),
+    )?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("GIT_CONFIG_GLOBAL", &global_config)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "external global hooksPath should fail cargo build"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Refusing to install hooks"),
+        "expected prek hooksPath refusal, got: {stderr}"
+    );
+
+    Ok(())
+}
+
 /// NO_HUSKY_HOOKS=1 skips installation.
 #[test]
 fn test_install_skipped_with_env_var() -> Result<(), Error> {
@@ -151,34 +717,16 @@ fn test_install_git_config_fails_gracefully() -> Result<(), Error> {
     project.add_husky_rs("dependencies", false)?;
     project.create_hooks()?;
 
-    // Create a fake git script that exits non-zero, simulating git failure
     let fake_dir = project.path.join("fake-bin");
-    fs::create_dir_all(&fake_dir)?;
-    let git_script = fake_dir.join("git");
-    fs::write(&git_script, "#!/bin/sh\nexit 1\n")?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&git_script, fs::Permissions::from_mode(0o755))?;
-    }
-
-    let path = format!(
-        "{}:{}",
-        fake_dir.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
+    create_failing_git(&fake_dir)?;
 
     let output = std::process::Command::new("cargo")
         .arg("build")
         .current_dir(&project.path)
-        .env("PATH", &path)
+        .env("PATH", path_with_prepend(&fake_dir)?)
         .output()?;
 
-    assert!(
-        output.status.success(),
-        "build should succeed even if git config fails"
-    );
+    assert!(output.status.success(), "build should succeed even if git config fails");
 
     // hooksPath was not set (fake git failed), but hook files still exist on disk
     for hook in HOOK_TYPES {
@@ -387,11 +935,7 @@ fn test_install_overrides_existing_hooks_path() -> Result<(), Error> {
     let project = TestProject::new("override-")?;
 
     // Set a custom hooksPath before husky runs
-    run_command_success(
-        "git",
-        &["config", "core.hooksPath", "custom-hooks"],
-        &project.path,
-    )?;
+    run_command_success("git", &["config", "core.hooksPath", "custom-hooks"], &project.path)?;
 
     project.add_husky_rs("dependencies", false)?;
     project.create_hooks()?;
@@ -545,27 +1089,17 @@ fn test_hook_triggers_pre_commit() -> Result<(), Error> {
     let marker = project.path.join("hook_ran");
     // Git Bash on Windows needs forward slashes
     let marker_str = marker.display().to_string().replace('\\', "/");
-    project.create_hook(
-        "pre-commit",
-        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker_str),
-    )?;
+    project.create_hook("pre-commit", &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker_str))?;
     project.build()?;
 
     // Add a file so there's something to commit
     fs::write(project.path.join("foo.txt"), "bar")?;
     run_command_success("git", &["add", "foo.txt"], &project.path)?;
 
-    let output = run_command(
-        "git",
-        &["commit", "-m", "test: trigger pre-commit"],
-        &project.path,
-    )?;
+    let output = run_command("git", &["commit", "-m", "test: trigger pre-commit"], &project.path)?;
 
     assert!(output.success, "commit should succeed: {}", output.stderr);
-    assert!(
-        marker.exists(),
-        "pre-commit hook should have created marker file"
-    );
+    assert!(marker.exists(), "pre-commit hook should have created marker file");
 
     Ok(())
 }
@@ -577,10 +1111,7 @@ fn test_hook_failure_aborts_commit() -> Result<(), Error> {
     project.add_husky_rs("dependencies", false)?;
 
     // Hook outputs a message then fails — both go to stderr
-    project.create_hook(
-        "pre-commit",
-        "#!/bin/sh\necho 'REJECTED by hook' >&2\nexit 1\n",
-    )?;
+    project.create_hook("pre-commit", "#!/bin/sh\necho 'REJECTED by hook' >&2\nexit 1\n")?;
     project.build()?;
 
     fs::write(project.path.join("foo.txt"), "bar")?;
@@ -616,17 +1147,10 @@ fn test_hook_triggers_commit_msg() -> Result<(), Error> {
     fs::write(project.path.join("foo.txt"), "bar")?;
     run_command_success("git", &["add", "foo.txt"], &project.path)?;
 
-    let output = run_command(
-        "git",
-        &["commit", "-m", "feat: test commit-msg hook"],
-        &project.path,
-    )?;
+    let output = run_command("git", &["commit", "-m", "feat: test commit-msg hook"], &project.path)?;
 
     assert!(output.success, "commit should succeed: {}", output.stderr);
-    assert!(
-        marker.exists(),
-        "commit-msg hook should have created marker file"
-    );
+    assert!(marker.exists(), "commit-msg hook should have created marker file");
 
     let content = fs::read_to_string(&marker)?;
     assert!(
@@ -646,26 +1170,16 @@ fn test_hook_triggers_post_commit() -> Result<(), Error> {
 
     let marker = project.path.join("post_ran");
     let marker_str = marker.display().to_string().replace('\\', "/");
-    project.create_hook(
-        "post-commit",
-        &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker_str),
-    )?;
+    project.create_hook("post-commit", &format!("#!/bin/sh\ntouch {}\nexit 0\n", marker_str))?;
     project.build()?;
 
     fs::write(project.path.join("foo.txt"), "bar")?;
     run_command_success("git", &["add", "foo.txt"], &project.path)?;
 
-    let output = run_command(
-        "git",
-        &["commit", "-m", "test: trigger post-commit"],
-        &project.path,
-    )?;
+    let output = run_command("git", &["commit", "-m", "test: trigger post-commit"], &project.path)?;
 
     assert!(output.success, "commit should succeed: {}", output.stderr);
-    assert!(
-        marker.exists(),
-        "post-commit hook should have created marker file"
-    );
+    assert!(marker.exists(), "post-commit hook should have created marker file");
 
     Ok(())
 }
@@ -714,11 +1228,7 @@ fn test_install_in_worktree() -> Result<(), Error> {
     assert!(verify_hook_installed(&worktree, "pre-commit"));
 
     // Cleanup worktree registration
-    let _ = run_command(
-        "git",
-        &["worktree", "remove", worktree.to_str().unwrap()],
-        &main_repo,
-    );
+    let _ = run_command("git", &["worktree", "remove", worktree.to_str().unwrap()], &main_repo);
 
     Ok(())
 }

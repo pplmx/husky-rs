@@ -6,6 +6,7 @@ Complete guide to using `husky-rs` in your Rust projects.
 
 - [Quick Start](#quick-start)
 - [Installation Methods](#installation-methods)
+- [prek Integration](#prek-integration)
 - [Creating Hooks](#creating-hooks)
 - [Hook Configuration](#hook-configuration)
 - [Environment Variables](#environment-variables)
@@ -76,6 +77,81 @@ cargo add --git https://github.com/pplmx/husky-rs.git --branch main
 # Add to your project dev-dependency from Git repository default branch:
 cargo add --dev --git https://github.com/pplmx/husky-rs.git
 ```
+
+## prek Integration
+
+Repositories can use any configuration format supported by prek:
+
+- `prek.toml`
+- `.pre-commit-config.yaml`
+- `.pre-commit-config.yml`
+
+When husky-rs detects one of these files, it runs `prek install` from the
+repository root and leaves hook management completely to prek. `prek.toml`
+takes precedence when multiple formats are present, matching prek itself.
+
+Install prek once:
+
+```sh
+cargo install prek
+# Or, if cargo-binstall is available:
+cargo binstall prek
+```
+
+Then a normal Cargo command installs the hooks:
+
+```sh
+cargo build
+```
+
+Husky-rs does not force a fixed set of Git hook types. Configure them using the
+same setting supported by pre-commit and prek:
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+repos:
+  # ...
+```
+
+If prek is missing, the config is invalid, or either validation or installation
+fails, the Cargo build fails with prek's diagnostic output. Set
+`NO_HUSKY_HOOKS=1` when hook installation must be skipped explicitly.
+
+prek installs shims into Git's effective hooks directory. If hooks already
+exist there, prek may preserve them as `*.legacy`. Do not commit generated
+shims because they can contain machine-specific executable paths.
+
+### Switching Modes
+
+Without a supported prek config, husky-rs uses standalone `.husky/` mode. A
+prek config takes precedence even if `.husky/` already exists; prek then
+decides how to migrate or chain hooks in Git's effective hooks directory.
+
+To switch from standalone to prek:
+
+```sh
+cargo install prek
+# Add prek.toml or .pre-commit-config.yaml/.yml
+cargo clean -p husky-rs
+cargo build
+```
+
+The clean is required when standalone mode was already cached. Existing hooks
+in `.husky/` may be renamed to `*.legacy` and continue running alongside the
+new prek hooks.
+
+To switch back to standalone safely:
+
+```sh
+prek uninstall --all
+# Remove prek.toml and/or .pre-commit-config.yaml/.yml
+cargo clean -p husky-rs
+cargo build
+```
+
+Run `prek uninstall --all` before removing the config so prek can remove its
+shims and restore migrated legacy hooks. Husky-rs does not uninstall hooks
+automatically from a Cargo build script.
 
 ## Creating Hooks
 
