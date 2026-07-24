@@ -108,9 +108,10 @@ fn install_hooks() -> Result<()> {
 /// Mode 2: prek integration.
 ///
 /// When a prek-supported config exists, delegate everything to prek.
-/// `prek install` is idempotent — it only writes hooks when needed.
-/// prek manages core.hooksPath, hook scripts, and legacy migration.
+/// prek installs hooks natively into `.git/hooks/` — no `.husky/` directory needed.
+/// Any prior `core.hooksPath` (e.g. `.husky`) is cleared.
 fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
+    // 1. Validate config before making any changes.
     let validation = Command::new("prek")
         .arg("validate-config")
         .arg(config_path)
@@ -120,15 +121,51 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
         .output();
     ensure_prek_command_succeeds("prek validate-config", validation, config_path)?;
 
+    // 2. Clear any prior core.hooksPath (e.g. leftover from standalone `.husky` mode).
+    //    In prek mode, hooks live natively in `.git/hooks/` — the git default.
+    let current_hooks_path = Command::new("git")
+        .args(["config", "core.hooksPath"])
+        .current_dir(project_root)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    if !current_hooks_path.is_empty() {
+        let status = Command::new("git")
+            .args(["config", "--unset", "core.hooksPath"])
+            .current_dir(project_root)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        if let Ok(s) = status {
+            if s.success() {
+                println!("cargo:warning=husky-rs: Cleared core.hooksPath (was \"{current_hooks_path}\")");
+            }
+        }
+    }
+
+    // 3. Install prek hooks natively into `.git/hooks/`.
     let installation = Command::new("prek")
         .arg("install")
+        .arg("--git-dir")
+        .arg(project_root.join(".git"))
         .current_dir(project_root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .output();
-    ensure_prek_command_succeeds("prek install", installation, config_path)?;
+    ensure_prek_command_succeeds("prek install --git-dir .git", installation, config_path)?;
 
-    println!("cargo:warning=husky-rs: prek hooks active (via prek install)");
+    // 4. Remove the stale `.husky/` directory if it exists (cleanup from standalone mode).
+    let husky_dir = project_root.join(HUSKY_DIR);
+    if husky_dir.is_dir() {
+        if let Err(e) = fs::remove_dir_all(&husky_dir) {
+            eprintln!("husky-rs: Could not remove legacy .husky/ directory: {e}");
+        } else {
+            println!("cargo:warning=husky-rs: Removed legacy .husky/ directory");
+        }
+    }
+
+    println!("cargo:warning=husky-rs: prek hooks active (native mode — .git/hooks/)");
     Ok(())
 }
 
