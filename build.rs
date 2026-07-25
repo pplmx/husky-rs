@@ -139,18 +139,32 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
     if !current_hooks_path.is_empty() {
-        let status = Command::new("git")
+        // Try to unset from the local repo config first.
+        let _ = Command::new("git")
             .args(["config", "--unset", "core.hooksPath"])
             .current_dir(project_root)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
-        if let Ok(s) = status {
-            if s.success() {
-                println!("cargo:warning=husky-rs: Cleared core.hooksPath (was \"{current_hooks_path}\")");
-            }
+
+        // If hooksPath is still set, it comes from a global/system scope and
+        // would shadow the native .git/hooks/ directory that prek relies on.
+        let remaining = Command::new("git")
+            .args(["config", "core.hooksPath"])
+            .current_dir(project_root)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        if !remaining.is_empty() {
+            return Err(HuskyError::PrekInstallFailed(format!(
+                "Refusing to install hooks: global core.hooksPath is set to \"{current_hooks_path}\". \
+                 In prek mode hooks live natively in .git/hooks/. \
+                 Unset it with: git config --global --unset core.hooksPath"
+            )));
         }
+
+        println!("cargo:warning=husky-rs: Cleared core.hooksPath (was \"{current_hooks_path}\")");
     }
 
     // 4. Install prek hooks natively into `.git/hooks/`.
