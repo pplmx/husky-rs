@@ -30,15 +30,28 @@ doc-check:
 msrv-check:
     cargo +1.78 check --all-targets --all-features --workspace
 
+# Install dev tools and set up git hooks
+init:
+    uv tool install prek
+    uv tool install rumdl
+    uv tool install ruff
+
+# Run doctests (/// examples in src/lib.rs)
+doctest:
+    cargo test --doc --workspace --all-features
+
 # Generate coverage report
 coverage:
     cargo tarpaulin --all-features --workspace --exclude-files 'src/bin/*'
 
 # Quick read-only checks (local loop)
-quick: fmt-check clippy doc-check test
+quick: fmt-check clippy doc-check doctest test
+
+# Run all security gates (audit + deny)
+security: audit deny
 
 # Full CI gate
-ci: fmt-check clippy doc-check msrv-check test deny
+ci: fmt-check clippy doc-check msrv-check test deny doctest
 
 # Auto-fix clippy + format
 fix:

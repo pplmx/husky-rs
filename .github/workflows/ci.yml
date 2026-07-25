@@ -32,6 +32,9 @@ jobs:
                     RUSTDOCFLAGS: -D warnings
                 run: cargo doc --no-deps --document-private-items --all-features --workspace
 
+            -   name: Run doctests
+                run: cargo test --doc --workspace --all-features
+
     msrv:
         runs-on: ubuntu-latest
         steps:

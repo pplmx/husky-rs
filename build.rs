@@ -34,12 +34,12 @@ enum HuskyError {
 impl std::fmt::Display for HuskyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HuskyError::GitDirNotFound(path) => {
+            Self::GitDirNotFound(path) => {
                 write!(f, "Git directory not found in '{path}' or its parent directories")
             }
-            HuskyError::Io(err) => write!(f, "IO error: {err}"),
-            HuskyError::GitConfigFailed(err) => write!(f, "Git config failed: {err}"),
-            HuskyError::PrekInstallFailed(err) => write!(f, "prek installation failed: {err}"),
+            Self::Io(err) => write!(f, "IO error: {err}"),
+            Self::GitConfigFailed(err) => write!(f, "Git config failed: {err}"),
+            Self::PrekInstallFailed(err) => write!(f, "prek installation failed: {err}"),
         }
     }
 }
@@ -48,7 +48,7 @@ impl std::error::Error for HuskyError {}
 
 impl From<io::Error> for HuskyError {
     fn from(err: io::Error) -> Self {
-        HuskyError::Io(err)
+        Self::Io(err)
     }
 }
 
@@ -96,13 +96,16 @@ fn install_hooks() -> Result<()> {
         .map(|config| project_root.join(config))
         .find(|config| config.is_file());
 
-    if let Some(prek_config) = prek_config {
-        println!("cargo:rerun-if-changed={}", prek_config.display());
-        install_prek_mode(project_root, &prek_config)
-    } else {
-        println!("cargo:rerun-if-changed={}", user_hooks_dir.display());
-        install_standalone_mode(project_root)
-    }
+    prek_config.map_or_else(
+        || {
+            println!("cargo:rerun-if-changed={}", user_hooks_dir.display());
+            install_standalone_mode(project_root)
+        },
+        |prek_config| {
+            println!("cargo:rerun-if-changed={}", prek_config.display());
+            install_prek_mode(project_root, &prek_config)
+        },
+    )
 }
 
 /// Mode 2: prek integration.
@@ -294,9 +297,10 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
 }
 
 fn find_git_dir() -> Result<PathBuf> {
-    let start_dir = env::var("OUT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| env::current_dir().expect("Failed to get current directory"));
+    let start_dir = env::var("OUT_DIR").map_or_else(
+        |_| env::current_dir().expect("Failed to get current directory"),
+        PathBuf::from,
+    );
 
     find_git_dir_from_path(&start_dir).ok_or_else(|| HuskyError::GitDirNotFound(start_dir.display().to_string()))
 }
@@ -314,13 +318,12 @@ fn find_git_dir_from_path(start_path: &Path) -> Option<PathBuf> {
 }
 
 fn is_valid_git_file(git_file: &Path) -> bool {
-    let parent = git_file.parent().unwrap_or(Path::new("."));
+    let parent = git_file.parent().unwrap_or_else(|| Path::new("."));
     fs::read_to_string(git_file)
         .ok()
         .and_then(|content| {
             let line = content.trim_end_matches(['\n', '\r']);
             line.strip_prefix("gitdir: ").map(PathBuf::from)
         })
-        .map(|resolved| parent.join(resolved).is_dir())
-        .unwrap_or(false)
+        .is_some_and(|resolved| parent.join(resolved).is_dir())
 }

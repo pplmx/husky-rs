@@ -91,6 +91,7 @@ pub fn hooks_dir(project_root: impl AsRef<Path>) -> PathBuf {
 ///     return;
 /// }
 /// ```
+#[must_use]
 pub fn should_skip_installation() -> bool {
     std::env::var_os("NO_HUSKY_HOOKS").is_some()
 }
@@ -142,6 +143,7 @@ pub const SUPPORTED_HOOKS: &[&str] = &[
 /// assert!(is_valid_hook_name("pre-push"));
 /// assert!(!is_valid_hook_name("invalid-hook"));
 /// ```
+#[must_use]
 pub fn is_valid_hook_name(name: &str) -> bool {
     SUPPORTED_HOOKS.contains(&name)
 }
