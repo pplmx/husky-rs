@@ -221,6 +221,17 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
         return Ok(());
     }
 
+    // The path exists but may be a regular file — refuse early on all platforms.
+    if user_hooks_dir.is_file() {
+        return Err(HuskyError::Io(io::Error::new(
+            io::ErrorKind::NotADirectory,
+            format!(
+                "{} exists but is not a directory; remove it or replace it with a directory",
+                user_hooks_dir.display()
+            ),
+        )));
+    }
+
     let current_hooks_path = Command::new("git")
         .args(["config", "core.hooksPath"])
         .current_dir(project_root)
