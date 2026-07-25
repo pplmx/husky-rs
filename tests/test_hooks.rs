@@ -60,10 +60,11 @@ cargo test --quiet || exit 1
 #[test]
 fn test_hook_cargo_fmt() -> Result<(), Error> {
     let hook = r#"#!/bin/sh
+set -e
 echo "Checking format..."
-cargo fmt --check || exit 1
+cargo fmt --check
 "#;
-    assert!(validate_shell_syntax(hook).is_ok());
+    validate_shell_syntax(hook).expect("cargo fmt hook shell syntax");
 
     let project = TestProject::new("hook-fmt-")?;
     project.add_husky_rs("dependencies", false)?;
