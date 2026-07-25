@@ -36,16 +36,8 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             -   uses: actions/checkout@v7
-
-            -   name: Install Rust toolchain (MSRV)
-                uses: dtolnay/rust-toolchain@stable
-                with:
-                    # NOTE: Keep in sync with rust-version in Cargo.toml
-                    toolchain: "1.78"
-
-            -   name: Cache Rust dependencies
-                uses: Swatinem/rust-cache@v2
-
+            -   uses: dtolnay/rust-toolchain@stable
+            -   uses: Swatinem/rust-cache@v2
             -   name: Check MSRV
                 run: cargo check --all-targets --all-features --workspace
 
@@ -58,13 +50,8 @@ jobs:
 
         steps:
             -   uses: actions/checkout@v7
-
-            -   name: Install Rust toolchain
-                uses: dtolnay/rust-toolchain@stable
-
-            -   name: Cache Rust dependencies
-                uses: Swatinem/rust-cache@v2
-
+            -   uses: dtolnay/rust-toolchain@stable
+            -   uses: Swatinem/rust-cache@v2
             -   name: Run tests
                 run: cargo test --all-features --workspace
 
@@ -73,18 +60,13 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             -   uses: actions/checkout@v7
-
-            -   name: Install Rust toolchain
-                uses: dtolnay/rust-toolchain@stable
-
-            -   name: Cache Rust dependencies
-                uses: Swatinem/rust-cache@v2
+            -   uses: dtolnay/rust-toolchain@stable
+            -   uses: Swatinem/rust-cache@v2
 
             -   name: Install prek
-                uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2
+                uses: j178/prek-action@v2
                 with:
                     install-only: true
-                    prek-version: 0.4.10
 
             -   name: Run real prek integration tests
                 env:
@@ -97,7 +79,6 @@ jobs:
         steps:
             -   uses: actions/checkout@v7
             -   uses: Swatinem/rust-cache@v2
-            -   name: Install cargo-deny
-                uses: taiki-e/install-action@cargo-deny
+            -   uses: taiki-e/install-action@cargo-deny
             -   name: Run cargo-deny
                 run: cargo deny check
