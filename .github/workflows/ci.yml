@@ -67,7 +67,7 @@ jobs:
             -   uses: Swatinem/rust-cache@v2
 
             -   name: Install prek
-                uses: j178/prek-action@v2
+                uses: j178/prek-action@v3.0.0
                 with:
                     install-only: true
 
