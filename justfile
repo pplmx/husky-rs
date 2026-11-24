@@ -28,7 +28,7 @@ doc-check:
 
 # MSRV check (keep in sync with rust-version in Cargo.toml)
 msrv-check:
-    cargo +1.78 check --all-targets --all-features --workspace
+    cargo +1.83 check --all-targets --all-features --workspace
 
 # Install dev tools and set up git hooks
 init:
@@ -40,9 +40,9 @@ init:
 doctest:
     cargo test --doc --workspace --all-features
 
-# Generate coverage report
+# Generate coverage report (same selection as the CI coverage workflow)
 coverage:
-    cargo tarpaulin --all-features --workspace --exclude-files 'src/bin/*'
+    cargo tarpaulin --all-features --workspace --out xml --output-dir coverage
 
 # Quick read-only checks (local loop)
 quick: fmt-check clippy doc-check doctest test

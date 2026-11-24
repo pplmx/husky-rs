@@ -119,30 +119,24 @@ cargo build
 
 ## Build Errors
 
-### "User hook script is empty"
+### "exists but is not a directory"
 
 **Error:**
 
 ```text
-Error: EmptyUserHook("/path/to/.husky/pre-commit")
+husky-rs: IO error: /path/to/project/.husky exists but is not a directory; remove it or replace it with a directory
 ```
 
 **Cause:**
-Hook file contains only whitespace or empty lines.
+`.husky` exists as a regular file, so it cannot hold hook scripts.
 
 **Solution:**
-Add actual content to your hook:
+Remove the file and recreate it as a directory:
 
 ```sh
-# Bad - empty or whitespace only
-.husky/pre-commit:
-
-
-
-# Good - at least some command
-.husky/pre-commit:
-#!/bin/sh
-echo "Running hook"
+rm .husky
+mkdir .husky
+# Or recreate your hook scripts under the new directory
 ```
 
 ### "Git directory not found"
@@ -150,7 +144,7 @@ echo "Running hook"
 **Error:**
 
 ```text
-Error: GitDirNotFound("/path/to/project")
+husky-rs: Unable to find .git directory starting from: /path/to/project
 ```
 
 **Common causes:**
@@ -169,7 +163,12 @@ Error: GitDirNotFound("/path/to/project")
    cargo build
    ```
 
-3. **Git submodule issue:**
+3. **`CARGO_TARGET_DIR` points outside the repository:**
+   The build script locates the project from `OUT_DIR`, so a target directory
+   outside the repo makes hook installation a silent no-op. Keep the target dir
+   inside the repository, or run the build without overriding it.
+
+4. **Git submodule issue:**
    The `.git` file might not point to valid directory. Check:
 
    ```sh

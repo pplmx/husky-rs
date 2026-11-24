@@ -121,6 +121,7 @@ pub const SUPPORTED_HOOKS: &[&str] = &[
     "post-receive",
     "post-update",
     "reference-transaction",
+    "push-to-checkout",
     "pre-auto-gc",
     "post-rewrite",
     "sendemail-validate",
@@ -197,7 +198,12 @@ mod tests {
 
     #[test]
     fn test_supported_hooks_count() {
-        assert_eq!(SUPPORTED_HOOKS.len(), 27);
+        assert_eq!(SUPPORTED_HOOKS.len(), 28);
+    }
+
+    #[test]
+    fn test_push_to_checkout_is_supported() {
+        assert!(is_valid_hook_name("push-to-checkout"));
     }
 
     #[test]

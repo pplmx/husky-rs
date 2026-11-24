@@ -1,7 +1,7 @@
 //! husky-rs CLI tool
 //!
 //! Optional command-line interface for managing Git hooks.
-//! Install with: cargo install husky-rs --features=cli
+//! Install with: cargo install husky-rs
 
 use std::env;
 use std::fs;

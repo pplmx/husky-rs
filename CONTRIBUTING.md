@@ -94,13 +94,13 @@ cargo test
 cargo test test_name
 
 # With verbose output
-cargo test -- --nocapg
+cargo test -- --nocapture
 
 # Integration tests only
-cargo test --test test_husky
+cargo test --test test_hooks
 
-# CLI tests (requires cli feature)
-cargo test --features=cli --test test_cli
+# CLI tests
+cargo test --test test_cli
 ```
 
 ### Commit Message Format

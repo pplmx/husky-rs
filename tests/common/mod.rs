@@ -359,16 +359,19 @@ impl TestProject {
     }
 
     /// Verify hooks are installed (or not).
+    ///
+    /// "Installed" means `core.hooksPath` points at `.husky`. The negative case
+    /// must assert on that directly: hook files stay on disk either way, so any
+    /// softer check passes even when installation wrongly happened.
     pub fn verify_hooks(&self, expect_installed: bool) -> Result<(), Error> {
         for hook in HOOK_TYPES {
             let installed = verify_hook_installed(&self.path, hook);
             if expect_installed {
                 assert!(installed, "Hook {} should be installed", hook);
             } else {
-                let content = get_hook_content(&self.path, hook).unwrap_or_default();
                 assert!(
-                    !installed || !content.contains("husky-rs"),
-                    "Hook {} should not be installed with husky-rs content",
+                    !installed,
+                    "Hook {} should NOT be installed (core.hooksPath must not be .husky)",
                     hook
                 );
             }

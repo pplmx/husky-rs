@@ -14,7 +14,7 @@
 - ⚡ **Automatic installation** - Hooks configure on `cargo build` or `cargo test`
 - 🔄 **Smart rerun detection** - No need for `cargo clean` when updating hooks
 - 🦀 **prek integration** - Supports `prek.toml` and pre-commit YAML configs
-- 🎯 **All 27 Git hooks supported** - Client-side and server-side hooks
+- 🎯 **All 28 Git hooks supported** - Client-side and server-side hooks
 - 🌍 **Cross-platform** - Works on Unix-like systems and Windows
 - 🛠️ **Optional CLI tool** - `husky init`, `husky add`, `husky list` commands
 - 📚 **Optional library API** - Helper functions for advanced use cases

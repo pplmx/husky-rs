@@ -23,8 +23,8 @@ This document will walk you through setting up your development environment, run
 2. **Build the Project**: This command compiles the project and its dependencies:
 
     ```bash
-    make build
-    # Or: cargo build
+    cargo build
+    # Or, for an optimized binary: just build
     ```
 
 ## Running Tests
@@ -32,7 +32,7 @@ This document will walk you through setting up your development environment, run
 Tests are crucial to ensure the stability of the project. To run all tests, use the following command:
 
 ```bash
-make test
+just test
 # Or: cargo test
 ```
 
@@ -45,7 +45,7 @@ This command will compile the code and run all tests, ensuring all components wo
 To build the project in release mode, use:
 
 ```bash
-make build
+just build
 # Or: cargo build --release
 ```
 
@@ -58,14 +58,14 @@ Maintaining consistent code style is essential. We use `rustfmt` for formatting 
 To format your code, run:
 
 ```bash
-make fmt
-# Or: cargo fmt
+cargo fmt --all
+# Or, to check formatting without changing files: just fmt-check
 ```
 
 To run the linter:
 
 ```bash
-make clippy
+just clippy
 # Or: cargo clippy --all-targets --all-features -- -D warnings
 ```
 
@@ -76,7 +76,7 @@ These commands will automatically check and optionally fix any code style issues
 To generate the project documentation, run:
 
 ```bash
-make doc
+just doc
 # Or: cargo doc --no-deps
 ```
 
@@ -87,7 +87,7 @@ This will create the documentation for your project and its dependencies.
 To clean up build artifacts and other generated files, you can use:
 
 ```bash
-make clean
+just clean
 # Or: cargo clean
 ```
 

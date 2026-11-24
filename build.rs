@@ -170,16 +170,22 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
         println!("cargo:warning=husky-rs: Cleared core.hooksPath (was \"{current_hooks_path}\")");
     }
 
-    // 4. Install prek hooks natively into `.git/hooks/`.
+    // 4. Install prek hooks natively into `<git-common-dir>/hooks/`.
+    //
+    // `--git-dir` is required because `prek install` without it follows
+    // `core.hooksPath`. It must point at the *common* dir, not `<root>/.git`:
+    // in worktrees and submodules `.git` is a file, and git always reads hooks
+    // from the common dir (e.g. `.git/modules/sub/hooks`).
+    let git_common_dir = resolve_git_common_dir(project_root)?;
     let installation = Command::new("prek")
         .arg("install")
         .arg("--git-dir")
-        .arg(project_root.join(".git"))
+        .arg(&git_common_dir)
         .current_dir(project_root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .output();
-    ensure_prek_command_succeeds("prek install --git-dir .git", installation, config_path)?;
+    ensure_prek_command_succeeds("prek install --git-dir", installation, config_path)?;
 
     println!("cargo:warning=husky-rs: prek hooks active (native mode — .git/hooks/)");
     Ok(())
@@ -294,6 +300,39 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Resolves the repository's git *common* directory.
+///
+/// Worktrees and submodules store `.git` as a file pointing elsewhere, and git
+/// reads hooks from the common dir in every layout, so `<root>/.git` is wrong
+/// there. Falls back to `<root>/.git` when git cannot answer.
+///
+/// `--path-format=absolute` is deliberately avoided: it needs git >= 2.31, and
+/// the plain form returns a relative path for a normal repo and an absolute one
+/// for a worktree, so both are normalised here.
+fn resolve_git_common_dir(project_root: &Path) -> Result<PathBuf> {
+    if let Ok(output) = Command::new("git")
+        .args(["rev-parse", "--git-common-dir"])
+        .current_dir(project_root)
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                let path = PathBuf::from(path);
+                return Ok(if path.is_absolute() {
+                    path
+                } else {
+                    project_root.join(path)
+                });
+            }
+        }
+    }
+
+    Ok(project_root.join(".git"))
 }
 
 fn find_git_dir() -> Result<PathBuf> {

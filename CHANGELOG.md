@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 🐛 Fixed
+
+- **prek mode in worktrees and submodules**: `prek install` was passed
+  `<root>/.git`, but in a worktree or submodule `.git` is a *file*, so prek
+  failed with `failed to create directory ... Not a directory (os error 20)`
+  and aborted the Cargo build. husky-rs now resolves the git *common* directory
+  with `git rev-parse --git-common-dir`, which is where git actually reads
+  hooks in every repository layout (`.git/hooks/` for a normal repo,
+  `.git/modules/<name>/hooks/` for a submodule).
+- **`verify_hooks(false)` test helper asserted almost nothing**: the negative
+  branch used `!installed || !content.contains("husky-rs")`, which passes for
+  any uninstalled-hook template. It now asserts `!installed` directly, so
+  regressions in skip logic (e.g. `NO_HUSKY_HOOKS`) are actually caught.
+- **Submodule and worktree tests could pass without testing anything**:
+  both returned `Ok(())` when `git submodule add` / `git worktree add` failed.
+  Modern git refuses local-path submodules (`transport 'file' not allowed`),
+  so the submodule test was silently a no-op. Setup failures now fail the test,
+  and the submodule clone allows the file protocol explicitly.
+
+### ✨ Added
+
+- **`push-to-checkout`** is now recognised in `SUPPORTED_HOOKS` (28 hooks).
+  It was missing, so `is_valid_hook_name("push-to-checkout")` returned `false`
+  and `husky add` warned that it was not a standard Git hook.
+
+### 🔧 Changed
+
+- **CI actually checks the MSRV**: the `msrv` job used the stable toolchain, so
+  it never tested the declared minimum. It now pins `1.83`, matching
+  `rust-version` in `Cargo.toml`. The `just msrv-check` recipe no longer
+  hardcodes the outdated `1.78`.
+- **`just coverage`** now uses the same file selection as the CI coverage
+  workflow.
+
+### 📝 Documentation
+
+- Corrected the documented crate version (`0.2` -> `0.4`), the removed `cli`
+  feature (`cargo install husky-rs --features=cli` no longer applies), stale
+  `make` targets (the `Makefile` was replaced by `justfile`), and the MSRV in
+  the maintainer skill.
+- Replaced two invented error strings in the troubleshooting guide with the
+  real messages, including a note that `CARGO_TARGET_DIR` outside the
+  repository makes hook installation a silent no-op.
+
 ## [0.4.0] - 2026-07-24
 
 ### 🎯 Highlights
@@ -390,6 +436,7 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ---
 
+[Unreleased]: https://github.com/pplmx/husky-rs/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/pplmx/husky-rs/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/pplmx/husky-rs/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/pplmx/husky-rs/compare/v0.3.1...v0.3.2

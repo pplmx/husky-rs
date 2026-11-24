@@ -46,7 +46,7 @@ Hooks install on both `cargo build` and `cargo test`:
 
 ```toml
 [dependencies]
-husky-rs = "0.2"
+husky-rs = "0.4"
 ```
 
 ```sh
@@ -59,7 +59,7 @@ Hooks only install on `cargo test` (recommended for most projects):
 
 ```toml
 [dev-dependencies]
-husky-rs = "0.2"
+husky-rs = "0.4"
 ```
 
 ```sh
@@ -90,8 +90,13 @@ When husky-rs detects one of these files, it switches to **prek native mode**:
 
 1. Validates the config (`prek validate-config`)
 2. Clears `core.hooksPath` (if previously set)
-3. Runs `prek install --git-dir .git` → shims are installed into `.git/hooks/`
+3. Runs `prek install --git-dir <git-common-dir>` → shims go into `<git-common-dir>/hooks/`
 4. Pre-existing `.husky/` is left on disk but ignored
+
+In a normal repository the common dir is `.git`, so shims land in `.git/hooks/`.
+In a worktree or submodule `.git` is a file and git reads hooks from the common
+directory instead (e.g. `.git/modules/<name>/hooks/`), which husky-rs resolves
+for you.
 
 `prek.toml` takes precedence when multiple formats are present.
 
