@@ -66,6 +66,9 @@ fn main() {
 
 fn run() -> Result<()> {
     println!("cargo:rerun-if-env-changed=NO_HUSKY_HOOKS");
+    // The project root is derived from OUT_DIR, so a change here changes which
+    // repository (if any) gets hooks installed.
+    println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
 
     if env::var_os("NO_HUSKY_HOOKS").is_some() {
         return Ok(());
@@ -73,7 +76,20 @@ fn run() -> Result<()> {
 
     install_hooks().or_else(|error| match error {
         HuskyError::GitDirNotFound(path) => {
-            eprintln!("husky-rs: Unable to find .git directory starting from: {path}");
+            // The project root is located from OUT_DIR, so a target dir outside
+            // the repository looks exactly like "not a git repository". That is
+            // the one case silently skipping installation is a real surprise, so
+            // warn there. Without CARGO_TARGET_DIR this is a normal situation
+            // (docs.rs, `cargo install`, unpacked tarballs) and stays quiet.
+            if env::var_os("CARGO_TARGET_DIR").is_some() {
+                println!(
+                    "cargo:warning=husky-rs: CARGO_TARGET_DIR is outside the repository, so no .git was \
+                     found above {path}; hooks were NOT installed. Set CARGO_TARGET_DIR inside the \
+                     repository to enable hook installation."
+                );
+            } else {
+                eprintln!("husky-rs: Unable to find .git directory starting from: {path}");
+            }
             Ok(())
         }
         HuskyError::GitConfigFailed(error) => {

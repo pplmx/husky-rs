@@ -23,6 +23,14 @@ All notable changes to this project will be documented in this file.
   so the submodule test was silently a no-op. Setup failures now fail the test,
   and the submodule clone allows the file protocol explicitly.
 
+- **A `CARGO_TARGET_DIR` outside the repository silently skipped installation**:
+  the build script locates the project from `OUT_DIR`, so an external target
+  directory looks like "not a git repository" and hooks were never installed,
+  with no message on a normal build. This now emits a warning naming the cause
+  and the fix. Builds with no `CARGO_TARGET_DIR` (docs.rs, `cargo install`,
+  unpacked tarballs) stay quiet, so nothing changes for consumers that are not
+  in a repository.
+
 ### ✨ Added
 
 - **`push-to-checkout`** is now recognised in `SUPPORTED_HOOKS` (28 hooks).
@@ -45,8 +53,7 @@ All notable changes to this project will be documented in this file.
   `make` targets (the `Makefile` was replaced by `justfile`), and the MSRV in
   the maintainer skill.
 - Replaced two invented error strings in the troubleshooting guide with the
-  real messages, including a note that `CARGO_TARGET_DIR` outside the
-  repository makes hook installation a silent no-op.
+  real messages, and documented the `CARGO_TARGET_DIR` pitfall.
 
 ## [0.4.0] - 2026-07-24
 

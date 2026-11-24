@@ -740,6 +740,61 @@ fn test_install_no_git_directory() -> Result<(), Error> {
     Ok(())
 }
 
+/// A `CARGO_TARGET_DIR` outside the repository hides `.git` from the build
+/// script, which would otherwise skip installation without a word. That case
+/// must warn; a target dir inside the repository must still install.
+#[test]
+fn test_install_warns_when_target_dir_hides_git() -> Result<(), Error> {
+    let project = TestProject::new("install-ext-target-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hook("pre-commit", "#!/bin/sh\necho 'test'\n")?;
+
+    let outside = create_temp_dir("install-ext-target-out-")?;
+    let hidden = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("CARGO_TARGET_DIR", outside.path())
+        .output()?;
+    assert!(
+        hidden.status.success(),
+        "build should still succeed: {}",
+        String::from_utf8_lossy(&hidden.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&hidden.stderr);
+    assert!(
+        stderr.contains("CARGO_TARGET_DIR is outside the repository") && stderr.contains("NOT installed"),
+        "expected a warning when CARGO_TARGET_DIR hides .git, got: {stderr}"
+    );
+    assert!(
+        !verify_hook_installed(&project.path, "pre-commit"),
+        "hooks must not be reported as installed when .git is unreachable"
+    );
+
+    // Same project, target dir inside the repo: installation works silently.
+    let inside = project.path.join("target-inside");
+    let installed = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("CARGO_TARGET_DIR", &inside)
+        .output()?;
+    assert!(
+        installed.status.success(),
+        "build failed: {}",
+        String::from_utf8_lossy(&installed.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&installed.stderr);
+    assert!(
+        !stderr.contains("hooks were NOT installed"),
+        "an in-repo target dir should not warn about skipping, got: {stderr}"
+    );
+    assert!(
+        verify_hook_installed(&project.path, "pre-commit"),
+        "an in-repo target dir should install hooks"
+    );
+
+    Ok(())
+}
+
 /// Git config failures are handled gracefully — build should not fail.
 #[test]
 fn test_install_git_config_fails_gracefully() -> Result<(), Error> {
