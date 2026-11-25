@@ -852,11 +852,21 @@ fn test_install_warns_when_target_dir_hides_git() -> Result<(), Error> {
     project.add_husky_rs("dependencies", false)?;
     project.create_hook("pre-commit", "#!/bin/sh\necho 'test'\n")?;
 
-    let outside = create_temp_dir("install-ext-target-out-")?;
+    // The target dir must have no `.git` anywhere above it, or discovery finds
+    // that repository instead and the warning legitimately does not fire. That
+    // can happen on machines with a stray repository above the temp root, so
+    // check the precondition instead of asserting on an environment-dependent
+    // outcome.
+    let isolated = create_temp_dir("install-ext-target-out-")?;
+    let outside = isolated.path().join("target");
+    fs::create_dir_all(&outside)?;
+    if outside.ancestors().any(|dir| dir.join(".git").exists()) {
+        return Ok(()); // An unrelated repository shadows the temp root; not our case to test.
+    }
     let hidden = std::process::Command::new("cargo")
         .arg("build")
         .current_dir(&project.path)
-        .env("CARGO_TARGET_DIR", outside.path())
+        .env("CARGO_TARGET_DIR", &outside)
         .output()?;
     assert!(
         hidden.status.success(),
