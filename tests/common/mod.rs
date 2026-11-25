@@ -11,6 +11,7 @@ use std::io::Error;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ============================================================================
@@ -404,16 +405,21 @@ impl TestProject {
 /// Validate shell script syntax (Unix only).
 #[cfg(unix)]
 pub fn validate_shell_syntax(script: &str) -> Result<(), String> {
-    let temp_file = format!(
-        "/tmp/husky_validate_{}.sh",
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
-    );
+    // The name must be unique across concurrently running tests: this helper is
+    // called from many `#[test]`s that cargo runs in parallel, and a name derived
+    // only from the clock collides when two calls land on the same nanosecond,
+    // after which one test's cleanup deletes the other's file and `sh -n` fails
+    // with "No such file or directory". A process-wide counter guarantees
+    // uniqueness within the run.
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let unique = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temp_file = env::temp_dir().join(format!("husky_validate_{}_{}.sh", std::process::id(), unique));
 
     if let Err(e) = fs::write(&temp_file, script) {
         return Err(format!("Failed to write temp file: {}", e));
     }
 
-    let output = Command::new("sh").args(["-n", &temp_file]).output();
+    let output = Command::new("sh").args(["-n"]).arg(&temp_file).output();
     let _ = fs::remove_file(&temp_file);
 
     match output {
