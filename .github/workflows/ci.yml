@@ -35,6 +35,12 @@ jobs:
             -   name: Run doctests
                 run: cargo test --doc --workspace --all-features
 
+            -   name: Add Windows target
+                run: rustup target add x86_64-pc-windows-gnu
+
+            -   name: Check tests compile for Windows
+                run: cargo check --target x86_64-pc-windows-gnu --all-targets --all-features --workspace
+
     msrv:
         runs-on: ubuntu-latest
         steps:

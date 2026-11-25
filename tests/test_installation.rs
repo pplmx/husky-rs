@@ -121,6 +121,9 @@ fn write_executable(path: &std::path::Path, content: &str) -> Result<(), Error> 
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
 }
 
+/// Only the `#[cfg(unix)]` real-prek tests consult this, so on other targets
+/// it would otherwise be dead code.
+#[cfg(unix)]
 fn real_prek_e2e_enabled() -> bool {
     env::var_os("PREK_E2E").is_some()
 }
@@ -1588,8 +1591,7 @@ fn test_husky_is_file_not_directory_fails_build() -> Result<(), Error> {
 // ============================================================================
 
 /// Creates a cargo+git project wired for prek mode (husky-rs dep + a
-/// `.pre-commit-config.yaml`), committed so builds see a clean tree.
-#[cfg(unix)]
+/// `.pre-commit-config.yaml`). Used by tests on every platform.
 fn init_prek_project(path: &std::path::Path) -> Result<(), Error> {
     run_command_success("git", &["init"], path)?;
     run_command_success("git", &["config", "user.email", "t@t.com"], path)?;
@@ -1602,6 +1604,7 @@ fn init_prek_project(path: &std::path::Path) -> Result<(), Error> {
 
 /// Builds `path` in prek mode and asserts the pre-commit shim landed under
 /// `hooks_dir`, which is where git reads hooks for that repository layout.
+/// Only called from `#[cfg(unix)]` layout tests.
 #[cfg(unix)]
 fn assert_prek_installs_into(path: &std::path::Path, hooks_dir: &std::path::Path) -> Result<(), Error> {
     let build = run_command("cargo", &["build"], path)?;
