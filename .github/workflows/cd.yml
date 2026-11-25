@@ -23,6 +23,7 @@ jobs:
 
     github-release:
         name: GitHub Release
+        needs: publish-cargo
         runs-on: ubuntu-latest
         steps:
             -   name: Checkout Code

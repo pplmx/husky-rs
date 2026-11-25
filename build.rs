@@ -77,11 +77,15 @@ fn run() -> Result<()> {
     install_hooks().or_else(|error| match error {
         HuskyError::GitDirNotFound(path) => {
             // The project root is located from OUT_DIR, so a target dir outside
-            // the repository looks exactly like "not a git repository". That is
-            // the one case silently skipping installation is a real surprise, so
-            // warn there. Without CARGO_TARGET_DIR this is a normal situation
-            // (docs.rs, `cargo install`, unpacked tarballs) and stays quiet.
-            if env::var_os("CARGO_TARGET_DIR").is_some() {
+            // the repository looks exactly like "not a git repository". Warn
+            // there, because silently skipping installation is a real surprise
+            // for someone who expected hooks.
+            //
+            // docs.rs sets CARGO_TARGET_DIR (`/opt/rustwide/target`) *and* builds
+            // outside any repository, so keying on the variable alone would warn
+            // on every docs build. docs.rs marks its builds with DOCS_RS, so skip
+            // the warning there and leave the rest unchanged.
+            if env::var_os("CARGO_TARGET_DIR").is_some() && env::var_os("DOCS_RS").is_none() {
                 println!(
                     "cargo:warning=husky-rs: CARGO_TARGET_DIR is outside the repository, so no .git was \
                      found above {path}; hooks were NOT installed. Set CARGO_TARGET_DIR inside the \

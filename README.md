@@ -71,8 +71,10 @@ If the repository contains `prek.toml`, `.pre-commit-config.yaml`, or
 `.pre-commit-config.yml`, husky-rs delegates hook installation completely to
 [prek](https://github.com/j178/prek) in **native mode**:
 
-- Clears `core.hooksPath` (if previously set)
-- Runs `prek install --git-dir .git` → shims go to `.git/hooks/`
+- Clears a repository-local `core.hooksPath` (if previously set); refuses to
+  install when hooksPath comes from global/system config
+- Runs `prek install --git-dir <git-common-dir>` → shims go to its `hooks/`
+  subdirectory (`.git/hooks/` for a normal repo)
 - Pre-existing `.husky/` directories are ignored (left on disk, not used)
 
 ```sh

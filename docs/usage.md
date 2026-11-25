@@ -89,7 +89,8 @@ Repositories can use any configuration format supported by prek:
 When husky-rs detects one of these files, it switches to **prek native mode**:
 
 1. Validates the config (`prek validate-config`)
-2. Clears `core.hooksPath` (if previously set)
+2. Clears a repository-local `core.hooksPath` (if previously set); refuses to
+   install when hooksPath comes from global/system config
 3. Runs `prek install --git-dir <git-common-dir>` → shims go into `<git-common-dir>/hooks/`
 4. Pre-existing `.husky/` is left on disk but ignored
 

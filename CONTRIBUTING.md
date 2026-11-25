@@ -59,7 +59,7 @@ cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 
 # Check all at once
-make clippy  # or cargo clippy --fix --allow-dirty
+just clippy  # or cargo clippy --fix --allow-dirty
 ```
 
 **Guidelines:**
@@ -181,15 +181,16 @@ cargo doc --no-deps 2>&1 | grep warning
 
 ### Useful Commands
 
-See the [Makefile](./Makefile) for all available commands:
+See the [justfile](./justfile) for all available commands:
 
 ```shell
-make help        # Show all commands
-make build       # Build release
-make test        # Run tests
-make fmt         # Format code
-make clippy      # Run linter
-make fix         # Auto-fix issues
-make doc         # Generate docs
-make clean       # Clean build artifacts
+just                  # Show all commands
+just build            # Build release binary
+just test             # Run tests
+just fmt-check        # Check formatting
+just clippy           # Run linter
+just fix              # Auto-fix issues
+just doc              # Generate docs
+just clean            # Clean build artifacts
+just ci               # Full CI gate
 ```
