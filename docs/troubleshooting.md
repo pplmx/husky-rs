@@ -167,8 +167,16 @@ husky-rs: Unable to find .git directory starting from: /path/to/project
    The build script locates the project from `OUT_DIR`, so a target directory
    outside the repo makes hook installation a no-op. husky-rs emits a
    `CARGO_TARGET_DIR is outside the repository ... hooks were NOT installed`
-   warning in this case. Keep the target dir inside the repository, or run the
-   build without overriding it.
+   diagnostic in this case, but cargo only shows build-script warnings from a
+   registry dependency when you build with `-vv`:
+
+   ```sh
+   cargo build -vv 2>&1 | grep 'CARGO_TARGET_DIR is outside'
+   git config core.hooksPath   # empty means nothing was installed
+   ```
+
+   Keep the target dir inside the repository, or run the build without
+   overriding it.
 
 4. **Git submodule issue:**
    The `.git` file might not point to valid directory. Check:

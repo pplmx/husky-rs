@@ -25,11 +25,13 @@ All notable changes to this project will be documented in this file.
 - **A `CARGO_TARGET_DIR` outside the repository silently skipped installation**:
   the build script locates the project from `OUT_DIR`, so an external target
   directory looks like "not a git repository" and hooks were never installed,
-  with no message on a normal build. This now emits a warning naming the cause
-  and the fix. The warning is skipped when `DOCS_RS` is set, because docs.rs
-  builds with `CARGO_TARGET_DIR` set and outside any repository, so keying on
-  the variable alone would warn on every docs build. `cargo install` and
-  unpacked tarballs set neither variable and stay quiet.
+  with no message on a normal build. This now emits a diagnostic naming the
+  cause and the fix when the situation is detected. Note that cargo hides
+  build-script warnings from registry dependencies unless you pass `-vv`, so
+  users on crates.io see it only via `cargo build -vv`. The diagnostic is
+  skipped when `DOCS_RS` is set, because docs.rs builds with
+  `CARGO_TARGET_DIR` set and outside any repository, so keying on the variable
+  alone would fire on every docs build.
 
 ### ✨ Added
 
