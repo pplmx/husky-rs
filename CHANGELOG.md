@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.4.1] - 2026-11-25
 
 ### 🐛 Fixed
 
@@ -22,7 +22,6 @@ All notable changes to this project will be documented in this file.
   Modern git refuses local-path submodules (`transport 'file' not allowed`),
   so the submodule test was silently a no-op. Setup failures now fail the test,
   and the submodule clone allows the file protocol explicitly.
-
 - **A `CARGO_TARGET_DIR` outside the repository silently skipped installation**:
   the build script locates the project from `OUT_DIR`, so an external target
   directory looks like "not a git repository" and hooks were never installed,
@@ -444,7 +443,7 @@ use husky_rs::{hooks_dir, should_skip_installation, is_valid_hook_name};
 
 ---
 
-[Unreleased]: https://github.com/pplmx/husky-rs/compare/v0.4.0...HEAD
+[0.4.1]: https://github.com/pplmx/husky-rs/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/pplmx/husky-rs/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/pplmx/husky-rs/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/pplmx/husky-rs/compare/v0.3.1...v0.3.2
