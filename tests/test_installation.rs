@@ -512,6 +512,106 @@ fn test_prek_mode_is_cached() -> Result<(), Error> {
     Ok(())
 }
 
+/// Editing the prek config must re-run the build script, otherwise a changed
+/// config never reaches `prek install`.
+#[test]
+fn test_prek_config_change_reruns_install() -> Result<(), Error> {
+    let project = TestProject::new("install-prek-rerun-")?;
+    project.add_husky_rs("dependencies", false)?;
+    fs::write(project.path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+
+    let fake_bin = project.path.join("fake-bin");
+    let invocation_log = project.path.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+    let path = path_with_prepend(&fake_bin)?;
+
+    let first = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+    assert!(first.status.success(), "first cargo build failed");
+    assert!(invocation_log.exists(), "first build should invoke prek");
+    fs::remove_file(&invocation_log)?;
+
+    // Change the config; the `rerun-if-changed` on it must trigger a re-install.
+    fs::write(
+        project.path.join(".pre-commit-config.yaml"),
+        "repos: []\ndefault_install_hook_types: [pre-commit]\n",
+    )?;
+
+    let second = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("PATH", &path)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+    assert!(second.status.success(), "second cargo build failed");
+    assert!(
+        invocation_log.exists(),
+        "changing the prek config must re-run `prek install`"
+    );
+
+    Ok(())
+}
+
+/// The `--git-dir` passed to prek must be an existing *directory* resolved for
+/// the current layout: in a worktree `.git` is a file, so passing `<root>/.git`
+/// made prek fail. Uses a fake prek, so it runs without the real tool.
+#[test]
+fn test_prek_install_uses_existing_git_dir_in_worktree() -> Result<(), Error> {
+    let main_repo = create_temp_dir("prek-gitdir-main-")?;
+    init_prek_project(&main_repo)?;
+    run_command_success("git", &["add", "."], &main_repo)?;
+    run_command_success("git", &["commit", "-m", "init"], &main_repo)?;
+
+    let worktree = create_temp_dir("prek-gitdir-wt-")?;
+    let _ = fs::remove_dir_all(&worktree);
+    let added = run_command(
+        "git",
+        &["worktree", "add", worktree.to_str().unwrap(), "-b", "wt"],
+        &main_repo,
+    )?;
+    assert!(added.success, "git worktree add failed: {}", added.stderr);
+    assert!(worktree.join(".git").is_file(), ".git should be a file here");
+
+    let fake_bin = worktree.join("fake-bin");
+    let invocation_log = worktree.join("prek-invocation.log");
+    create_fake_prek(&fake_bin, 0)?;
+
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&worktree)
+        .env("PATH", path_with_prepend(&fake_bin)?)
+        .env("PREK_INVOCATION_LOG", &invocation_log)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "cargo build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let invocation = fs::read_to_string(&invocation_log)?;
+    let git_dir_arg = invocation
+        .lines()
+        .skip_while(|line| *line != "install")
+        .nth(2)
+        .expect("install invocation should pass --git-dir <path>");
+    assert!(
+        std::path::Path::new(git_dir_arg).is_dir(),
+        "the --git-dir passed to prek must be an existing directory; in a worktree \
+         `<root>/.git` is a file, so it must be the common dir. Got: {git_dir_arg}"
+    );
+
+    let _ = run_command(
+        "git",
+        &["worktree", "remove", "--force", worktree.to_str().unwrap()],
+        &main_repo,
+    );
+    Ok(())
+}
+
 /// Real prek installs configured hook types and runs a local pre-commit hook.
 #[cfg(unix)]
 #[test]
@@ -790,6 +890,86 @@ fn test_install_warns_when_target_dir_hides_git() -> Result<(), Error> {
     assert!(
         verify_hook_installed(&project.path, "pre-commit"),
         "an in-repo target dir should install hooks"
+    );
+
+    Ok(())
+}
+
+/// A `.git` *file* that points at a missing directory is not a repository, so
+/// discovery walks past it. When an outer repository exists, that outer repo
+/// becomes the project root; when none does, installation is skipped.
+#[test]
+fn test_invalid_gitdir_file_is_skipped() -> Result<(), Error> {
+    let outer = create_temp_dir("install-bad-gitdir-outer-")?;
+    run_command_success("git", &["init"], &outer)?;
+    run_command_success("git", &["config", "user.email", "t@t.com"], &outer)?;
+    run_command_success("git", &["config", "user.name", "T"], &outer)?;
+    fs::create_dir_all(outer.join("src"))?;
+    fs::write(
+        outer.join("Cargo.toml"),
+        "[package]\nname = \"outer\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(outer.join("src").join("main.rs"), "fn main() {}")?;
+    create_hook(&outer, "pre-commit", "#!/bin/sh\necho 'outer'\n")?;
+    run_command_success("git", &["add", "."], &outer)?;
+    run_command_success("git", &["commit", "-m", "init"], &outer)?;
+
+    // A nested crate whose .git file points nowhere.
+    let inner = outer.join("sub");
+    fs::create_dir_all(inner.join("src"))?;
+    fs::write(
+        inner.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"inner\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nhusky-rs = {{ path = {:?} }}\n",
+            get_husky_rs_path()
+        ),
+    )?;
+    fs::write(inner.join("src").join("main.rs"), "fn main() {}")?;
+    fs::write(inner.join(".git"), "gitdir: /nonexistent/husky-rs-target\n")?;
+
+    let output = run_command("cargo", &["build"], &inner)?;
+    assert!(
+        output.success,
+        "a broken .git file must not fail the build: {}",
+        output.stderr
+    );
+
+    // The broken .git is rejected, so the *outer* repo is the project root.
+    let hooks_path = run_command("git", &["config", "core.hooksPath"], &outer)?;
+    assert_eq!(
+        hooks_path.stdout.trim(),
+        ".husky",
+        "the outer repository should receive the hooks, since the inner .git is invalid"
+    );
+
+    Ok(())
+}
+
+/// docs.rs builds with `CARGO_TARGET_DIR` set and outside any repository, so
+/// the "hooks were NOT installed" warning must not fire there. Without this
+/// guard every docs build of the crate would print it.
+#[test]
+fn test_no_target_dir_warning_on_docs_rs_build() -> Result<(), Error> {
+    let project = TestProject::new("install-docsrs-")?;
+    project.add_husky_rs("dependencies", false)?;
+    project.create_hook("pre-commit", "#!/bin/sh\necho 'test'\n")?;
+
+    let outside = create_temp_dir("install-docsrs-out-")?;
+    let output = std::process::Command::new("cargo")
+        .arg("build")
+        .current_dir(&project.path)
+        .env("CARGO_TARGET_DIR", outside.path())
+        .env("DOCS_RS", "1")
+        .output()?;
+    assert!(
+        output.status.success(),
+        "docs.rs-style build should succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("hooks were NOT installed"),
+        "docs.rs builds must not warn about skipped hook installation, got: {stderr}"
     );
 
     Ok(())
@@ -1389,9 +1569,14 @@ fn test_husky_is_file_not_directory_fails_build() -> Result<(), Error> {
         !output.success,
         "build should fail when .husky is a file, not a directory"
     );
+    // Assert on the actionable message, not the bare OS text: "Not a directory"
+    // also appears in the raw io::Error, so matching it would pass even when the
+    // guard that produces the guidance is removed.
     assert!(
-        output.stderr.contains("Not a directory") || output.stderr.contains("not a directory"),
-        "expected clear error about .husky being a file, got: {}",
+        output
+            .stderr
+            .contains("exists but is not a directory; remove it or replace it"),
+        "expected the actionable .husky-is-a-file error, got: {}",
         output.stderr
     );
 
