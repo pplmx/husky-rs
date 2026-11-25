@@ -34,7 +34,6 @@ msrv-check:
 init:
     uv tool install prek
     uv tool install rumdl
-    uv tool install ruff
 
 # Run doctests (/// examples in src/lib.rs)
 doctest:

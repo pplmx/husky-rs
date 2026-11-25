@@ -1402,6 +1402,37 @@ fn test_husky_is_file_not_directory_fails_build() -> Result<(), Error> {
 // prek mode in worktrees and submodules (.git is a file)
 // ============================================================================
 
+/// Creates a cargo+git project wired for prek mode (husky-rs dep + a
+/// `.pre-commit-config.yaml`), committed so builds see a clean tree.
+#[cfg(unix)]
+fn init_prek_project(path: &std::path::Path) -> Result<(), Error> {
+    run_command_success("git", &["init"], path)?;
+    run_command_success("git", &["config", "user.email", "t@t.com"], path)?;
+    run_command_success("git", &["config", "user.name", "T"], path)?;
+    run_command_success("cargo", &["init", "--bin"], path)?;
+    add_husky_dependency(&path.join("Cargo.toml"), &get_husky_rs_path())?;
+    fs::write(path.join(".pre-commit-config.yaml"), "repos: []\n")?;
+    Ok(())
+}
+
+/// Builds `path` in prek mode and asserts the pre-commit shim landed under
+/// `hooks_dir`, which is where git reads hooks for that repository layout.
+#[cfg(unix)]
+fn assert_prek_installs_into(path: &std::path::Path, hooks_dir: &std::path::Path) -> Result<(), Error> {
+    let build = run_command("cargo", &["build"], path)?;
+    assert!(
+        build.success,
+        "prek mode must build in this layout; stderr: {}",
+        build.stderr
+    );
+    assert!(
+        hooks_dir.join("pre-commit").is_file(),
+        "prek should install the shim into {}",
+        hooks_dir.display()
+    );
+    Ok(())
+}
+
 /// In a worktree, `.git` is a file and git reads hooks from the common dir.
 /// Passing `<root>/.git` to prek failed with "Not a directory".
 #[cfg(unix)]
@@ -1412,12 +1443,7 @@ fn test_real_prek_worktree_installs_hooks() -> Result<(), Error> {
     }
 
     let main_repo = create_temp_dir("prek-wt-main-")?;
-    run_command_success("git", &["init"], &main_repo)?;
-    run_command_success("git", &["config", "user.email", "t@t.com"], &main_repo)?;
-    run_command_success("git", &["config", "user.name", "T"], &main_repo)?;
-    run_command_success("cargo", &["init", "--bin"], &main_repo)?;
-    add_husky_dependency(&main_repo.join("Cargo.toml"), &get_husky_rs_path())?;
-    fs::write(main_repo.join(".pre-commit-config.yaml"), "repos: []\n")?;
+    init_prek_project(&main_repo)?;
     run_command_success("git", &["add", "."], &main_repo)?;
     run_command_success("git", &["commit", "-m", "init"], &main_repo)?;
 
@@ -1436,16 +1462,7 @@ fn test_real_prek_worktree_installs_hooks() -> Result<(), Error> {
     assert!(worktree.join(".git").is_file(), ".git should be a file in a worktree");
 
     // The hook must land in the common dir, which is where git looks in a worktree.
-    let build = run_command("cargo", &["build"], &worktree)?;
-    assert!(
-        build.success,
-        "prek mode must build in a worktree; stderr: {}",
-        build.stderr
-    );
-    assert!(
-        main_repo.join(".git").join("hooks").join("pre-commit").is_file(),
-        "prek should install the shim into the common .git/hooks/"
-    );
+    assert_prek_installs_into(&worktree, &main_repo.join(".git").join("hooks"))?;
 
     let _ = run_command(
         "git",
@@ -1476,11 +1493,7 @@ fn test_real_prek_submodule_installs_hooks() -> Result<(), Error> {
 
     let clone = create_temp_dir("prek-sub-clone-")?;
     run_command_success("git", &["clone", bare.to_str().unwrap(), "."], &clone)?;
-    run_command_success("git", &["config", "user.email", "t@t.com"], &clone)?;
-    run_command_success("git", &["config", "user.name", "T"], &clone)?;
-    run_command_success("cargo", &["init", "--bin"], &clone)?;
-    add_husky_dependency(&clone.join("Cargo.toml"), &get_husky_rs_path())?;
-    fs::write(clone.join(".pre-commit-config.yaml"), "repos: []\n")?;
+    init_prek_project(&clone)?;
     run_command_success("git", &["add", "."], &clone)?;
     run_command_success("git", &["commit", "-m", "init"], &clone)?;
     run_command_success("git", &["push", "-u", "origin", "HEAD"], &clone)?;
@@ -1506,21 +1519,9 @@ fn test_real_prek_submodule_installs_hooks() -> Result<(), Error> {
     let sub_path = parent.join("sub");
     assert!(sub_path.join(".git").is_file(), ".git should be a file in a submodule");
 
-    let build = run_command("cargo", &["build"], &sub_path)?;
-    assert!(
-        build.success,
-        "prek mode must build in a submodule; stderr: {}",
-        build.stderr
-    );
-    assert!(
-        parent
-            .join(".git")
-            .join("modules")
-            .join("sub")
-            .join("hooks")
-            .join("pre-commit")
-            .is_file(),
-        "prek should install the shim into .git/modules/sub/hooks/"
-    );
+    assert_prek_installs_into(
+        &sub_path,
+        &parent.join(".git").join("modules").join("sub").join("hooks"),
+    )?;
     Ok(())
 }

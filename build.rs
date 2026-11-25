@@ -155,12 +155,7 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
 
     // 3. Clear any prior core.hooksPath (e.g. leftover from standalone `.husky` mode).
     //    In prek mode, hooks live natively in `.git/hooks/` — the git default.
-    let current_hooks_path = Command::new("git")
-        .args(["config", "core.hooksPath"])
-        .current_dir(project_root)
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
+    let current_hooks_path = configured_hooks_path(project_root);
     if !current_hooks_path.is_empty() {
         // Try to unset from the local repo config first.
         let _ = Command::new("git")
@@ -173,17 +168,13 @@ fn install_prek_mode(project_root: &Path, config_path: &Path) -> Result<()> {
 
         // If hooksPath is still set, it comes from a global/system scope and
         // would shadow the native .git/hooks/ directory that prek relies on.
-        let remaining = Command::new("git")
-            .args(["config", "core.hooksPath"])
-            .current_dir(project_root)
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_default();
+        let remaining = configured_hooks_path(project_root);
         if !remaining.is_empty() {
             return Err(HuskyError::PrekInstallFailed(format!(
-                "Refusing to install hooks: global core.hooksPath is set to \"{current_hooks_path}\". \
-                 In prek mode hooks live natively in .git/hooks/. \
-                 Unset it with: git config --global --unset core.hooksPath"
+                "Refusing to install hooks: core.hooksPath is set to \"{current_hooks_path}\" outside \
+                 this repository (global/system scope). In prek mode hooks live natively in .git/hooks/. \
+                 Unset it with: git config --unset core.hooksPath (add --global or --system to match \
+                 where it is set)"
             )));
         }
 
@@ -261,12 +252,7 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
         )));
     }
 
-    let current_hooks_path = Command::new("git")
-        .args(["config", "core.hooksPath"])
-        .current_dir(project_root)
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
+    let current_hooks_path = configured_hooks_path(project_root);
 
     if current_hooks_path != ".husky" {
         let status = Command::new("git")
@@ -320,6 +306,20 @@ fn install_standalone_mode(project_root: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Reads the effective `core.hooksPath`, or an empty string when unset.
+///
+/// Returns the merged view of local, global and system scopes, which is why
+/// callers can use "still set after unsetting locally" to detect a
+/// global/system value.
+fn configured_hooks_path(project_root: &Path) -> String {
+    Command::new("git")
+        .args(["config", "core.hooksPath"])
+        .current_dir(project_root)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
 }
 
 /// Resolves the repository's git *common* directory.
